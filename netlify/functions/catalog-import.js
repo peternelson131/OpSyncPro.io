@@ -732,6 +732,36 @@ async function handlePost(event, userId, headers) {
       }, headers);
     }
     
+    // Handle delete action - delete single catalog import by ID
+    if (body.action === 'delete') {
+      const { id } = body;
+      
+      if (!id) {
+        return errorResponse(400, 'id is required for delete', headers);
+      }
+      
+      console.log(`🗑️ Deleting catalog import: ${id}`);
+      
+      const { error: deleteError, count } = await getSupabase()
+        .from('catalog_imports')
+        .delete()
+        .eq('user_id', userId)
+        .eq('id', id);
+      
+      if (deleteError) {
+        console.error('Failed to delete catalog import:', deleteError);
+        return errorResponse(500, `Failed to delete: ${deleteError.message}`, headers);
+      }
+      
+      console.log(`✅ Catalog import deleted: ${id}`);
+      
+      return successResponse({
+        success: true,
+        message: 'Catalog import deleted',
+        deleted: count || 1
+      }, headers);
+    }
+    
     if (body.action === 'import' && Array.isArray(body.asins)) {
       // Get import mode: 'skip' (default) or 'merge' (update existing records)
       importMode = body.mode === 'merge' ? 'merge' : 'skip';
