@@ -8,7 +8,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useDropzone } from 'react-dropzone';
 import * as XLSX from 'xlsx';
-import { userAPI } from '../lib/supabase';
+import { userAPI, supabase } from '../lib/supabase';
 import { 
   Upload,
   FileSpreadsheet,
@@ -155,7 +155,7 @@ export default function CatalogImport() {
     
     console.log('📡 Subscribing to enrichment job:', enrichmentProgress.jobId);
     
-    const subscription = userAPI.supabase
+    const subscription = supabase
       .channel(`enrichment-job-${enrichmentProgress.jobId}`)
       .on(
         'postgres_changes',
