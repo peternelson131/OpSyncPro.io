@@ -1028,11 +1028,8 @@ async function handlePost(event, userId, headers) {
         asin: row.asin,
         title: row.title,
         image_url: row.image_url,
-        amazon_url: `https://www.amazon.com/dp/${row.asin}`,
         status_id: statusId,
-        source: 'catalog_import',
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString()
+        source: 'catalog_import'
       });
     }
     
@@ -1145,18 +1142,34 @@ async function handlePost(event, userId, headers) {
         // Fire-and-forget trigger to background worker
         try {
           const workerUrl = `${process.env.URL || 'https://uat.opsyncpro.io'}/.netlify/functions/process-enrichment-job`;
+          const url = new URL(workerUrl);
           
-          https.request(workerUrl, {
+          const req = https.request({
+            hostname: url.hostname,
+            port: url.port || 443,
+            path: url.pathname,
             method: 'POST',
             headers: {
-              'Content-Type': 'application/json'
+              'Content-Type': 'application/json',
+              'Content-Length': Buffer.byteLength(JSON.stringify({ jobId: enrichmentJobId }))
             }
           }, (res) => {
             // Don't wait for response - fire and forget
             res.on('data', () => {}); // Drain response
-          }).end(JSON.stringify({ jobId: enrichmentJobId }));
+            res.on('end', () => {
+              console.log(`🚀 Enrichment worker triggered successfully (HTTP ${res.statusCode})`);
+            });
+          });
           
-          console.log(`🚀 Triggered background enrichment worker for job ${enrichmentJobId}`);
+          req.on('error', (e) => {
+            console.error(`Failed to trigger enrichment worker: ${e.message}`);
+            // Non-fatal - job will be picked up by scheduled task
+          });
+          
+          req.write(JSON.stringify({ jobId: enrichmentJobId }));
+          req.end();
+          
+          console.log(`🚀 Triggering background enrichment worker for job ${enrichmentJobId}`);
         } catch (triggerError) {
           console.error('Failed to trigger enrichment worker:', triggerError);
           // Non-fatal - job will be picked up by scheduled task
