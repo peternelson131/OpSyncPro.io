@@ -8,7 +8,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useDropzone } from 'react-dropzone';
 import * as XLSX from 'xlsx';
-import { userAPI } from '../lib/supabase';
+import { userAPI, supabase } from '../lib/supabase';
 import { 
   Upload,
   FileSpreadsheet,
@@ -87,6 +87,10 @@ export default function CatalogImport() {
   const [parseError, setParseError] = useState(null);
   const [showUploadModal, setShowUploadModal] = useState(false);
   
+  // Enrichment progress state
+  const [enrichmentProgress, setEnrichmentProgress] = useState(null); // { jobId, total, processed, enriched, failed, tokens, status }
+  const [enrichmentChannel, setEnrichmentChannel] = useState(null);
+  
   // Debounce ref for search
   const searchDebounceRef = useRef(null);
 
@@ -144,6 +148,74 @@ export default function CatalogImport() {
       }
     };
   }, []);
+
+  // Subscribe to enrichment job progress via Supabase Realtime
+  useEffect(() => {
+    if (!enrichmentProgress?.jobId) return;
+    
+    console.log('📡 Subscribing to enrichment job:', enrichmentProgress.jobId);
+    
+    const subscription = supabase
+      .channel(`enrichment-job-${enrichmentProgress.jobId}`)
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'enrichment_jobs',
+          filter: `id=eq.${enrichmentProgress.jobId}`
+        },
+        (payload) => {
+          console.log('📊 Enrichment progress update:', payload.new);
+          
+          setEnrichmentProgress({
+            jobId: payload.new.id,
+            total: payload.new.total_count,
+            processed: payload.new.processed_count,
+            enriched: payload.new.enriched_count,
+            failed: payload.new.failed_count,
+            tokens: payload.new.tokens_consumed,
+            status: payload.new.status
+          });
+          
+          // If job completed, refresh imports and show notification
+          if (payload.new.status === 'completed') {
+            console.log('✅ Enrichment job completed!');
+            loadImports();
+            
+            // Show success toast
+            const enrichedCount = payload.new.enriched_count;
+            const failedCount = payload.new.failed_count;
+            let message = `Enrichment complete: ${enrichedCount} products enriched`;
+            if (failedCount > 0) {
+              message += `, ${failedCount} unavailable`;
+            }
+            alert(message); // Replace with toast notification
+            
+            // Clear progress after 3 seconds
+            setTimeout(() => {
+              setEnrichmentProgress(null);
+            }, 3000);
+          }
+          
+          // If job failed, show error
+          if (payload.new.status === 'failed') {
+            console.error('❌ Enrichment job failed:', payload.new.error_message);
+            alert(`Enrichment failed: ${payload.new.error_message || 'Unknown error'}`);
+            setEnrichmentProgress(null);
+          }
+        }
+      )
+      .subscribe();
+    
+    setEnrichmentChannel(subscription);
+    
+    return () => {
+      console.log('📡 Unsubscribing from enrichment job');
+      subscription.unsubscribe();
+      setEnrichmentChannel(null);
+    };
+  }, [enrichmentProgress?.jobId]);
 
   // Debounce search input
   useEffect(() => {
@@ -368,8 +440,22 @@ export default function CatalogImport() {
         setDuplicateCheck(null);
         await loadImports();
         
-        // Auto-fetch images after import
-        if (autoFetchImages) {
+        // If enrichment job was created, start tracking progress
+        if (data.enrichmentJobId) {
+          console.log('📋 Enrichment job created:', data.enrichmentJobId);
+          setEnrichmentProgress({
+            jobId: data.enrichmentJobId,
+            total: data.stats?.new || 0,
+            processed: 0,
+            enriched: 0,
+            failed: 0,
+            tokens: 0,
+            status: 'pending'
+          });
+        }
+        
+        // Auto-fetch images after import (disabled if enrichment is running)
+        if (autoFetchImages && !data.enrichmentJobId) {
           await handleFetchImages(true);
         }
       } else {
@@ -556,6 +642,61 @@ export default function CatalogImport() {
           <RefreshCw className={`w-5 h-5 ${loading ? 'animate-spin' : ''}`} />
         </button>
       </div>
+
+      {/* Enrichment Progress Bar */}
+      {enrichmentProgress && (
+        <div className="mb-6 bg-accent/10 border border-accent/30 rounded-lg p-4">
+          <div className="flex items-center justify-between mb-3">
+            <h3 className="font-semibold text-theme-primary flex items-center gap-2">
+              <Loader className="w-4 h-4 animate-spin text-accent" />
+              Enriching Products from Keepa
+            </h3>
+            <span className="text-sm text-theme-secondary">
+              {enrichmentProgress.status === 'completed' ? 'Complete!' : 'In Progress...'}
+            </span>
+          </div>
+          
+          {/* Progress Bar */}
+          <div className="w-full bg-theme-hover rounded-full h-2.5 mb-3">
+            <div
+              className="bg-accent h-2.5 rounded-full transition-all duration-500"
+              style={{
+                width: `${enrichmentProgress.total > 0 
+                  ? (enrichmentProgress.processed / enrichmentProgress.total) * 100 
+                  : 0}%`
+              }}
+            />
+          </div>
+          
+          {/* Stats */}
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm">
+            <div>
+              <span className="text-theme-tertiary">Processed:</span>
+              <span className="ml-2 font-semibold text-theme-primary">
+                {enrichmentProgress.processed} / {enrichmentProgress.total}
+              </span>
+            </div>
+            <div>
+              <span className="text-theme-tertiary">Enriched:</span>
+              <span className="ml-2 font-semibold text-green-600">
+                {enrichmentProgress.enriched}
+              </span>
+            </div>
+            <div>
+              <span className="text-theme-tertiary">Failed:</span>
+              <span className="ml-2 font-semibold text-red-600">
+                {enrichmentProgress.failed}
+              </span>
+            </div>
+            <div>
+              <span className="text-theme-tertiary">Tokens:</span>
+              <span className="ml-2 font-semibold text-theme-primary">
+                {enrichmentProgress.tokens}
+              </span>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Upload Modal */}
       {showUploadModal && (

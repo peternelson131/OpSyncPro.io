@@ -21,9 +21,55 @@ const { verifyAuth } = require('./utils/auth');
 const Busboy = require('busboy');
 const XLSX = require('xlsx');
 const zlib = require('zlib');
+const https = require('https');
 const { promisify } = require('util');
 
 const gunzipAsync = promisify(zlib.gunzip);
+
+/**
+ * Fetch and decompress Keepa API response (handles gzip)
+ */
+async function keepaFetch(url) {
+  return new Promise((resolve, reject) => {
+    https.get(url, (res) => {
+      const chunks = [];
+      
+      res.on('data', (chunk) => {
+        chunks.push(chunk);
+      });
+      
+      res.on('end', async () => {
+        try {
+          const buffer = Buffer.concat(chunks);
+          
+          // Check if response is gzipped (Keepa always gzips)
+          const isGzip = buffer[0] === 0x1f && buffer[1] === 0x8b;
+          
+          let data;
+          if (isGzip) {
+            const decompressed = await gunzipAsync(buffer);
+            data = JSON.parse(decompressed.toString());
+          } else {
+            data = JSON.parse(buffer.toString());
+          }
+          
+          resolve(data);
+        } catch (error) {
+          console.error('Keepa decompression error:', error);
+          reject(new Error(`Failed to decompress Keepa response: ${error.message}`));
+        }
+      });
+      
+      res.on('error', (error) => {
+        console.error('Keepa request error:', error);
+        reject(new Error(`Keepa API request failed: ${error.message}`));
+      });
+    }).on('error', (error) => {
+      console.error('HTTPS request error:', error);
+      reject(new Error(`HTTPS request failed: ${error.message}`));
+    });
+  });
+}
 
 // Lazy-init Supabase client
 let supabase = null;
@@ -732,6 +778,36 @@ async function handlePost(event, userId, headers) {
       }, headers);
     }
     
+    // Handle delete action - delete single catalog import by ID
+    if (body.action === 'delete') {
+      const { id } = body;
+      
+      if (!id) {
+        return errorResponse(400, 'id is required for delete', headers);
+      }
+      
+      console.log(`🗑️ Deleting catalog import: ${id}`);
+      
+      const { error: deleteError, count } = await getSupabase()
+        .from('catalog_imports')
+        .delete()
+        .eq('user_id', userId)
+        .eq('id', id);
+      
+      if (deleteError) {
+        console.error('Failed to delete catalog import:', deleteError);
+        return errorResponse(500, `Failed to delete: ${deleteError.message}`, headers);
+      }
+      
+      console.log(`✅ Catalog import deleted: ${id}`);
+      
+      return successResponse({
+        success: true,
+        message: 'Catalog import deleted',
+        deleted: count || 1
+      }, headers);
+    }
+    
     if (body.action === 'import' && Array.isArray(body.asins)) {
       // Get import mode: 'skip' (default) or 'merge' (update existing records)
       importMode = body.mode === 'merge' ? 'merge' : 'skip';
@@ -895,6 +971,20 @@ async function handlePost(event, userId, headers) {
   console.log('📝 Creating sourced_products records...');
   
   const IMPORTED_EXISTING_VIDEO_STATUS_ID = 'fdb7c3fe-02c1-45ec-b459-87adf2d56ab2'; // UAT status ID
+
+  // Look up "Imported" status ID for default assignment
+  let IMPORTED_STATUS_ID = null;
+  try {
+    const { data: importedStatus } = await getSupabase()
+      .from('crm_statuses')
+      .select('id')
+      .eq('name', 'Imported')
+      .single();
+    IMPORTED_STATUS_ID = importedStatus?.id || null;
+    console.log('📋 Imported status ID:', IMPORTED_STATUS_ID);
+  } catch (err) {
+    console.error('Could not look up Imported status:', err);
+  }
   
   // Get ASINs that should be processed (new imports only, not skipped)
   const asinsToProcess = toInsert
@@ -945,18 +1035,15 @@ async function handlePost(event, userId, headers) {
       // Determine status based on whether video exists
       const statusId = asinsWithVideos.has(row.asin) 
         ? IMPORTED_EXISTING_VIDEO_STATUS_ID 
-        : null; // null = no status set
+        : IMPORTED_STATUS_ID; // Default to "Imported" so products appear in CRM
       
       sourcedProductsToCreate.push({
         user_id: userId,
         asin: row.asin,
         title: row.title,
         image_url: row.image_url,
-        amazon_url: `https://www.amazon.com/dp/${row.asin}`,
         status_id: statusId,
-        source: 'catalog_import',
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString()
+        source: 'catalog_import'
       });
     }
     
@@ -1023,6 +1110,90 @@ async function handlePost(event, userId, headers) {
   
   console.log(`✅ Import complete: ${stats.new} new, ${stats.updated} updated, ${stats.skipped} skipped`);
   
+  // === NEW: Create enrichment job for background Keepa API processing ===
+  let enrichmentJobId = null;
+  
+  if (stats.new > 0) {
+    // Get ASINs that need enrichment (missing title, image, or category)
+    const { data: asinsToEnrich } = await getSupabase()
+      .from('catalog_imports')
+      .select('id, asin')
+      .eq('user_id', userId)
+      .in('asin', toInsert.filter(i => i.status === 'imported').map(i => i.asin))
+      .or('title.is.null,image_url.is.null,category.is.null');
+    
+    if (asinsToEnrich && asinsToEnrich.length > 0) {
+      console.log(`📋 Creating enrichment job for ${asinsToEnrich.length} ASINs`);
+      
+      // Create enrichment job
+      const { data: enrichmentJob, error: enrichError } = await getSupabase()
+        .from('enrichment_jobs')
+        .insert({
+          user_id: userId,
+          import_batch_id: batch?.id,
+          total_count: asinsToEnrich.length,
+          processed_count: 0,
+          enriched_count: 0,
+          failed_count: 0,
+          status: 'pending'
+        })
+        .select()
+        .single();
+      
+      if (enrichError) {
+        console.error('Failed to create enrichment job:', enrichError);
+      } else {
+        enrichmentJobId = enrichmentJob.id;
+        console.log(`✅ Enrichment job created: ${enrichmentJobId}`);
+        
+        // Mark catalog imports as pending enrichment
+        await getSupabase()
+          .from('catalog_imports')
+          .update({ enrichment_status: 'pending' })
+          .eq('user_id', userId)
+          .in('id', asinsToEnrich.map(a => a.id));
+        
+        // Fire-and-forget trigger to background worker
+        try {
+          const workerUrl = `${process.env.URL || 'https://uat.opsyncpro.io'}/.netlify/functions/process-enrichment-job`;
+          const url = new URL(workerUrl);
+          
+          const req = https.request({
+            hostname: url.hostname,
+            port: url.port || 443,
+            path: url.pathname,
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Content-Length': Buffer.byteLength(JSON.stringify({ jobId: enrichmentJobId }))
+            }
+          }, (res) => {
+            // Don't wait for response - fire and forget
+            res.on('data', () => {}); // Drain response
+            res.on('end', () => {
+              console.log(`🚀 Enrichment worker triggered successfully (HTTP ${res.statusCode})`);
+            });
+          });
+          
+          req.on('error', (e) => {
+            console.error(`Failed to trigger enrichment worker: ${e.message}`);
+            // Non-fatal - job will be picked up by scheduled task
+          });
+          
+          req.write(JSON.stringify({ jobId: enrichmentJobId }));
+          req.end();
+          
+          console.log(`🚀 Triggering background enrichment worker for job ${enrichmentJobId}`);
+        } catch (triggerError) {
+          console.error('Failed to trigger enrichment worker:', triggerError);
+          // Non-fatal - job will be picked up by scheduled task
+        }
+      }
+    } else {
+      console.log(`ℹ️ All imported ASINs already have complete data (no enrichment needed)`);
+    }
+  }
+  
   // Build message based on what happened
   let message = `Successfully imported ${stats.new} new ASINs`;
   if (stats.updated > 0) {
@@ -1031,12 +1202,16 @@ async function handlePost(event, userId, headers) {
   if (stats.skipped > 0) {
     message += `, skipped ${stats.skipped}`;
   }
+  if (enrichmentJobId) {
+    message += `. Background enrichment started.`;
+  }
   
   return successResponse({
     success: true,
     message,
     stats,
-    batchId: batch?.id
+    batchId: batch?.id,
+    enrichmentJobId
   }, headers);
 }
 
