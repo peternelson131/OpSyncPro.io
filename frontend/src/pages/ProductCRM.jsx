@@ -2471,8 +2471,18 @@ export default function ProductCRM({ isPWA = false }) {
     
     console.log(`Generating thumbnails for ${productIds.length} products with ${ownerIds.length} owners`);
     
+    // Look up ASINs from product IDs (backend expects asin, not product_id)
+    const productAsins = products
+      .filter(p => productIds.includes(p.id))
+      .reduce((map, p) => { map[p.id] = p.asin; return map; }, {});
+    
     // Generate thumbnail for each product-owner combination
     for (const productId of productIds) {
+      const asin = productAsins[productId];
+      if (!asin) {
+        console.warn(`No ASIN found for product ${productId}, skipping thumbnail`);
+        continue;
+      }
       for (const ownerId of ownerIds) {
         try {
           const response = await fetch('/.netlify/functions/generate-thumbnail', {
@@ -2482,21 +2492,21 @@ export default function ProductCRM({ isPWA = false }) {
               'Content-Type': 'application/json'
             },
             body: JSON.stringify({
-              product_id: productId,
-              owner_id: ownerId
+              asin: asin,
+              ownerId: ownerId
             })
           });
           
           const result = await response.json();
           if (result.success) {
-            console.log(`✓ Thumbnail generated for product ${productId} with owner ${ownerId}`);
+            console.log(`✓ Thumbnail generated for ${asin} with owner ${ownerId}`);
           } else if (result.skipped) {
             console.log(`○ Skipped: ${result.reason}`);
           } else {
             console.error(`✗ Failed: ${result.error || 'Unknown error'}`);
           }
         } catch (err) {
-          console.error(`Thumbnail generation error for ${productId}:`, err);
+          console.error(`Thumbnail generation error for ${asin}:`, err);
         }
       }
     }
