@@ -972,18 +972,18 @@ async function handlePost(event, userId, headers) {
   
   const IMPORTED_EXISTING_VIDEO_STATUS_ID = 'fdb7c3fe-02c1-45ec-b459-87adf2d56ab2'; // UAT status ID
 
-  // Look up "Initial Contact" status ID for default assignment
-  let INITIAL_CONTACT_STATUS_ID = null;
+  // Look up "Imported" status ID for default assignment
+  let IMPORTED_STATUS_ID = null;
   try {
-    const { data: initialContactStatus } = await getSupabase()
+    const { data: importedStatus } = await getSupabase()
       .from('crm_statuses')
       .select('id')
-      .eq('name', 'Initial Contact')
+      .eq('name', 'Imported')
       .single();
-    INITIAL_CONTACT_STATUS_ID = initialContactStatus?.id || null;
-    console.log('📋 Initial Contact status ID:', INITIAL_CONTACT_STATUS_ID);
+    IMPORTED_STATUS_ID = importedStatus?.id || null;
+    console.log('📋 Imported status ID:', IMPORTED_STATUS_ID);
   } catch (err) {
-    console.error('Could not look up Initial Contact status:', err);
+    console.error('Could not look up Imported status:', err);
   }
   
   // Get ASINs that should be processed (new imports only, not skipped)
@@ -1035,7 +1035,7 @@ async function handlePost(event, userId, headers) {
       // Determine status based on whether video exists
       const statusId = asinsWithVideos.has(row.asin) 
         ? IMPORTED_EXISTING_VIDEO_STATUS_ID 
-        : INITIAL_CONTACT_STATUS_ID; // Default to "Initial Contact" so products appear in CRM
+        : IMPORTED_STATUS_ID; // Default to "Imported" so products appear in CRM
       
       sourcedProductsToCreate.push({
         user_id: userId,
