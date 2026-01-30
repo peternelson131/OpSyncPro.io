@@ -2,8 +2,6 @@ import { useState, useEffect, useRef } from 'react'
 import { Plus, Upload, Search, Check, X, Film, Package, Loader, Users } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 
-const CHUNK_SIZE = 10 * 1024 * 1024; // 10MB chunks
-
 // Status names that count as "delivered" or "completed"
 const DELIVERED_STATUS_NAMES = ['delivered'];
 const COMPLETED_STATUS_NAMES = ['completed'];
@@ -97,43 +95,7 @@ export default function PWAHome() {
     return true
   })
 
-  // Chunked upload helper
-  const uploadChunked = async (file, uploadUrl, onProgress) => {
-    const totalChunks = Math.ceil(file.size / CHUNK_SIZE);
-    let finalResponse = null;
-
-    for (let i = 0; i < totalChunks; i++) {
-      const start = i * CHUNK_SIZE;
-      const end = Math.min(start + CHUNK_SIZE, file.size);
-      const chunk = file.slice(start, end);
-
-      const response = await fetch(uploadUrl, {
-        method: 'PUT',
-        headers: {
-          'Content-Range': `bytes ${start}-${end - 1}/${file.size}`,
-          'Content-Type': 'application/octet-stream'
-        },
-        body: chunk
-      });
-
-      if (!response.ok) {
-        const errorText = await response.text();
-        throw new Error(`Upload failed at chunk ${i + 1}/${totalChunks}: ${errorText}`);
-      }
-
-      // The final chunk response contains the file metadata
-      if (i === totalChunks - 1) {
-        finalResponse = await response.json();
-      }
-
-      const chunkProgress = ((i + 1) / totalChunks) * 100;
-      onProgress(chunkProgress);
-    }
-
-    return finalResponse;
-  };
-
-  // Handle video upload
+  // Handle video upload to Supabase Storage
   const handleVideoUpload = async (e) => {
     const file = e.target.files?.[0]
     if (!file || !selectedProduct) return
@@ -144,52 +106,45 @@ export default function PWAHome() {
     try {
       const { data: { session } } = await supabase.auth.getSession()
       const token = session?.access_token
+      const { data: { user } } = await supabase.auth.getUser()
 
-      if (!token) {
+      if (!token || !user) {
         throw new Error('Not authenticated. Please log in again.')
       }
 
-      // Step 1: Create upload session
+      // Generate filename based on ASIN if available
       const fileExtension = file.name.split('.').pop().toLowerCase();
       const uploadFilename = selectedProduct.asin ? `${selectedProduct.asin}.${fileExtension}` : file.name;
       
-      const sessionResponse = await fetch('/.netlify/functions/onedrive-upload-session', {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          productId: selectedProduct.id,
-          filename: uploadFilename,
-          fileSize: file.size
-        })
-      });
+      // Generate storage path: {userId}/{productId}/{filename}
+      const storagePath = `${user.id}/${selectedProduct.id}/${uploadFilename}`;
 
-      if (!sessionResponse.ok) {
-        const errorData = await sessionResponse.json();
-        
-        if (errorData.error === 'OneDrive not connected') {
-          throw new Error('OneDrive not connected. Please connect in Settings.');
-        }
-        
-        throw new Error(errorData.error || 'Failed to create upload session');
+      // Simulate progress start
+      setUploadProgress(10)
+
+      // Upload file to Supabase Storage
+      const { data: uploadData, error: uploadError } = await supabase.storage
+        .from('product-videos')
+        .upload(storagePath, file, {
+          contentType: file.type,
+          upsert: true  // Overwrite if exists
+        });
+
+      if (uploadError) {
+        throw new Error(`Upload failed: ${uploadError.message}`);
       }
 
-      const sessionData = await sessionResponse.json();
+      // Simulate progress
+      setUploadProgress(60)
 
-      if (!sessionData.uploadUrl) {
-        throw new Error('No upload URL received');
-      }
+      // Get public URL for the uploaded file
+      const { data: { publicUrl } } = supabase.storage
+        .from('product-videos')
+        .getPublicUrl(storagePath);
 
-      // Step 2: Upload file in chunks
-      const oneDriveFile = await uploadChunked(file, sessionData.uploadUrl, setUploadProgress);
+      setUploadProgress(80)
 
-      if (!oneDriveFile || !oneDriveFile.id) {
-        throw new Error('Upload completed but no file ID returned');
-      }
-
-      // Step 3: Save video metadata
+      // Save video metadata via backend API
       const metadataResponse = await fetch('/.netlify/functions/videos', {
         method: 'POST',
         headers: {
@@ -197,12 +152,9 @@ export default function PWAHome() {
           'Content-Type': 'application/json'
         },
         body: JSON.stringify({
-          sessionId: sessionData.sessionId,
           productId: selectedProduct.id,
-          onedrive_file_id: oneDriveFile.id,
-          onedrive_path: oneDriveFile.parentReference?.path 
-            ? `${oneDriveFile.parentReference.path}/${oneDriveFile.name}`
-            : `/${oneDriveFile.name}`,
+          storage_path: storagePath,
+          storage_url: publicUrl,
           filename: uploadFilename,
           file_size: file.size,
           mime_type: file.type || null
@@ -210,10 +162,11 @@ export default function PWAHome() {
       });
 
       if (!metadataResponse.ok) {
-        const errorText = await metadataResponse.text();
-        throw new Error(`Failed to save video metadata: ${errorText}`);
+        const errorData = await metadataResponse.json();
+        throw new Error(errorData.error || 'Failed to save video metadata');
       }
       
+      setUploadProgress(100)
       setMessage({ type: 'success', text: `Video uploaded for ${selectedProduct.asin}!` })
       setSelectedProduct(null)
       setMode(null)

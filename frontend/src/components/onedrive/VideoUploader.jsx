@@ -1,11 +1,10 @@
 import { useState, useCallback } from 'react';
 import { useDropzone } from 'react-dropzone';
 import { toast } from 'react-toastify';
-import { userAPI } from '../../lib/supabase';
+import { userAPI, supabase } from '../../lib/supabase';
 import { Upload, X, RefreshCw, CheckCircle, AlertCircle, Film, FileVideo } from 'lucide-react';
 
-const CHUNK_SIZE = 10 * 1024 * 1024; // 10MB chunks
-const MAX_FILE_SIZE = 2 * 1024 * 1024 * 1024; // 2GB max file size
+const MAX_FILE_SIZE = 500 * 1024 * 1024; // 500MB max file size (Supabase limit)
 const ACCEPTED_VIDEO_TYPES = {
   'video/mp4': ['.mp4'],
   'video/quicktime': ['.mov'],
@@ -15,7 +14,7 @@ const ACCEPTED_VIDEO_TYPES = {
 
 /**
  * VideoUploader Component
- * Handles chunked video uploads to OneDrive with progress tracking
+ * Handles video uploads to Supabase Storage with progress tracking
  */
 export default function VideoUploader({ productId, asin, hasOwner = true, onUploadComplete }) {
   const [file, setFile] = useState(null);
@@ -31,8 +30,8 @@ export default function VideoUploader({ productId, asin, hasOwner = true, onUplo
     if (rejectedFiles.length > 0) {
       const rejection = rejectedFiles[0];
       if (rejection.file.size > MAX_FILE_SIZE) {
-        setError('File is too large. Maximum file size is 2GB.');
-        toast.error('File is too large. Maximum file size is 2GB.');
+        setError('File is too large. Maximum file size is 500MB.');
+        toast.error('File is too large. Maximum file size is 500MB.');
       } else {
         setError('Invalid file type. Please upload a video file (MP4, MOV, WEBM, or AVI).');
         toast.error('Invalid file type. Please upload a video file.');
@@ -63,42 +62,6 @@ export default function VideoUploader({ productId, asin, hasOwner = true, onUplo
     return Math.round(bytes / Math.pow(k, i) * 100) / 100 + ' ' + sizes[i];
   };
 
-  const uploadChunked = async (file, uploadUrl, onProgress) => {
-    const totalChunks = Math.ceil(file.size / CHUNK_SIZE);
-    let finalResponse = null;
-
-    for (let i = 0; i < totalChunks; i++) {
-      const start = i * CHUNK_SIZE;
-      const end = Math.min(start + CHUNK_SIZE, file.size);
-      const chunk = file.slice(start, end);
-
-      const response = await fetch(uploadUrl, {
-        method: 'PUT',
-        headers: {
-          'Content-Range': `bytes ${start}-${end - 1}/${file.size}`,
-          'Content-Type': 'application/octet-stream'
-        },
-        body: chunk
-      });
-
-      if (!response.ok) {
-        const errorText = await response.text();
-        throw new Error(`Upload failed at chunk ${i + 1}/${totalChunks}: ${errorText}`);
-      }
-
-      // The final chunk response contains the file metadata
-      if (i === totalChunks - 1) {
-        finalResponse = await response.json();
-      }
-
-      const chunkProgress = ((i + 1) / totalChunks) * 100;
-      onProgress(chunkProgress);
-    }
-
-    // Return the OneDrive file info from the final chunk response
-    return finalResponse;
-  };
-
   const handleUpload = async () => {
     if (!file) {
       toast.warning('Please select a file to upload');
@@ -116,49 +79,44 @@ export default function VideoUploader({ productId, asin, hasOwner = true, onUplo
 
     try {
       const token = await userAPI.getAuthToken();
+      
+      // Get current user ID
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
+        throw new Error('Not authenticated. Please log in again.');
+      }
 
-      // Step 1: Create upload session
       // Generate filename based on ASIN if available, otherwise use original name
       const fileExtension = file.name.split('.').pop().toLowerCase();
       const uploadFilename = asin ? `${asin}.${fileExtension}` : file.name;
       
-      const sessionResponse = await fetch('/.netlify/functions/onedrive-upload-session', {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          productId,
-          filename: uploadFilename,  // Use ASIN-based filename
-          fileSize: file.size
-        })
-      });
+      // Generate storage path: {userId}/{productId}/{filename}
+      const storagePath = `${user.id}/${productId}/${uploadFilename}`;
 
-      if (!sessionResponse.ok) {
-        const errorData = await sessionResponse.json();
-        
-        if (errorData.error === 'OneDrive not connected') {
-          throw new Error('OneDrive not connected. Please connect your OneDrive account in Settings.');
-        }
-        
-        throw new Error(errorData.error || 'Failed to create upload session');
+      // Upload file to Supabase Storage
+      // Note: Basic upload doesn't have progress callback, but it's fine for files under 500MB
+      const { data: uploadData, error: uploadError } = await supabase.storage
+        .from('product-videos')
+        .upload(storagePath, file, {
+          contentType: file.type,
+          upsert: true  // Overwrite if exists
+        });
+
+      if (uploadError) {
+        throw new Error(`Upload failed: ${uploadError.message}`);
       }
 
-      const sessionData = await sessionResponse.json();
+      // Simulate progress for better UX
+      setProgress(50);
 
-      if (!sessionData.uploadUrl) {
-        throw new Error('No upload URL received');
-      }
+      // Get public URL for the uploaded file
+      const { data: { publicUrl } } = supabase.storage
+        .from('product-videos')
+        .getPublicUrl(storagePath);
 
-      // Step 2: Upload file in chunks - returns OneDrive file info on completion
-      const oneDriveFile = await uploadChunked(file, sessionData.uploadUrl, setProgress);
+      setProgress(75);
 
-      if (!oneDriveFile || !oneDriveFile.id) {
-        throw new Error('Upload completed but no file ID returned from OneDrive');
-      }
-
-      // Step 3: Save video metadata with actual OneDrive file ID
+      // Save video metadata via backend API
       const metadataResponse = await fetch('/.netlify/functions/videos', {
         method: 'POST',
         headers: {
@@ -166,12 +124,9 @@ export default function VideoUploader({ productId, asin, hasOwner = true, onUplo
           'Content-Type': 'application/json'
         },
         body: JSON.stringify({
-          sessionId: sessionData.sessionId,  // Update existing pending record
           productId,
-          onedrive_file_id: oneDriveFile.id,  // Actual file ID from OneDrive
-          onedrive_path: oneDriveFile.parentReference?.path 
-            ? `${oneDriveFile.parentReference.path}/${oneDriveFile.name}`
-            : `/${oneDriveFile.name}`,
+          storage_path: storagePath,
+          storage_url: publicUrl,
           filename: uploadFilename,
           file_size: file.size,
           mime_type: file.type || null
@@ -179,7 +134,8 @@ export default function VideoUploader({ productId, asin, hasOwner = true, onUplo
       });
 
       if (!metadataResponse.ok) {
-        throw new Error('Failed to save video metadata');
+        const errorData = await metadataResponse.json();
+        throw new Error(errorData.error || 'Failed to save video metadata');
       }
 
       setUploadComplete(true);
@@ -269,7 +225,7 @@ export default function VideoUploader({ productId, asin, hasOwner = true, onUplo
                     Drop video file here or click to browse
                   </p>
                   <p className="text-xs text-theme-tertiary">
-                    Supports MP4, MOV, WEBM, AVI (max 2GB)
+                    Supports MP4, MOV, WEBM, AVI (max 500MB)
                   </p>
                 </>
               )}

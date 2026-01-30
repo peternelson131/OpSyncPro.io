@@ -111,7 +111,7 @@ export default function VideoGallery({ productId, onVideoDeleted }) {
   };
 
   const handleOpenVideo = async (video) => {
-    // If we have a transcoded URL, use it directly (no API call)
+    // Priority 1: Use transcoded URL if available (best quality for social)
     if (video.social_ready_url && video.social_ready_status === 'ready') {
       setSelectedVideo({
         ...video,
@@ -120,7 +120,16 @@ export default function VideoGallery({ productId, onVideoDeleted }) {
       return;
     }
     
-    // Otherwise fetch from OneDrive via video-download endpoint
+    // Priority 2: Use Supabase Storage URL if available (direct access, no API call)
+    if (video.storage_url) {
+      setSelectedVideo({
+        ...video,
+        streamUrl: video.storage_url
+      });
+      return;
+    }
+    
+    // Priority 3: Legacy - fetch from OneDrive via video-download endpoint
     setSelectedVideo(video);
     try {
       const token = await userAPI.getAuthToken();

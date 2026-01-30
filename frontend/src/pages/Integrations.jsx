@@ -562,8 +562,13 @@ function OneDriveIntegrationCard({ onStatusChange }) {
   return (
     <div className="bg-theme-primary rounded-lg border border-theme p-4">
       <div className="mb-3">
-        <h4 className="font-medium text-theme-primary">OneDrive</h4>
-        <p className="text-sm text-theme-tertiary">Cloud storage for product videos</p>
+        <h4 className="font-medium text-theme-primary">OneDrive <span className="text-xs bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400 px-2 py-0.5 rounded-full ml-2">Optional</span></h4>
+        <p className="text-sm text-theme-tertiary">
+          Sync copies of your videos to OneDrive (not required for upload/playback)
+        </p>
+        <p className="text-xs text-theme-tertiary mt-1">
+          ℹ️ Videos are stored securely in our system. Connect OneDrive only if you want backup copies synced to your personal cloud storage.
+        </p>
       </div>
       <OneDriveConnection onStatusChange={onStatusChange} />
     </div>
