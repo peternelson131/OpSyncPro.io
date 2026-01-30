@@ -46,21 +46,20 @@ async function updateVideoStatus(videoId, status, updates = {}) {
 }
 
 /**
- * Download video from OneDrive
+ * Get video download URL from storage (Supabase Storage or OneDrive fallback)
  */
-async function downloadFromOneDrive(userId, onedriveFileId) {
-  console.log(`Downloading video ${onedriveFileId} from OneDrive...`);
+async function getVideoDownloadUrl(video, userId) {
+  console.log(`Getting video download URL for video ${video.id}...`);
 
-  const { accessToken } = await getValidAccessToken(userId);
-  const downloadUrl = `https://graph.microsoft.com/v1.0/me/drive/items/${onedriveFileId}/content`;
+  const { getVideoUrl } = require('./utils/video-storage');
+  const downloadUrl = await getVideoUrl(video, userId);
 
-  const response = await fetch(downloadUrl, {
-    headers: { Authorization: `Bearer ${accessToken}` }
-  });
-
-  if (!response.ok) {
-    const errorText = await response.text();
-    throw new Error(`Failed to download from OneDrive: ${response.status} ${errorText}`);
+  // For compatibility with transcoder (may need OneDrive token for legacy videos)
+  let accessToken = null;
+  if (video.onedrive_file_id && !video.storage_url) {
+    // Legacy OneDrive video - need token for transcoder
+    const { accessToken: token } = await getValidAccessToken(userId);
+    accessToken = token;
   }
 
   return { downloadUrl, accessToken };
@@ -217,8 +216,8 @@ exports.handler = async (event, context) => {
     // Update status to processing
     await updateVideoStatus(videoId, 'processing');
 
-    // Step 1: Download from OneDrive
-    const { downloadUrl, accessToken } = await downloadFromOneDrive(userId, onedriveFileId);
+    // Step 1: Get video download URL (Supabase Storage or OneDrive fallback)
+    const { downloadUrl, accessToken } = await getVideoDownloadUrl(video, userId);
 
     // Step 2: Transcode video
     const { transcodedUrl, fileName: transcodedFileName } = await transcodeVideo(downloadUrl, accessToken);

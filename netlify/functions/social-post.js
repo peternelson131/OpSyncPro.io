@@ -432,32 +432,21 @@ async function postToYouTube(userId, video, title, description) {
     }
 
     // Get video file from OneDrive
-    const { accessToken: onedriveToken } = await getValidAccessToken(userId);
+    // Download video from storage (Supabase Storage or OneDrive fallback)
+    const { getVideoBuffer } = require('./utils/video-storage');
     
-    if (!video.onedrive_file_id) {
+    let videoBuffer;
+    try {
+      videoBuffer = await getVideoBuffer(video, userId);
+    } catch (err) {
+      console.error('Video download failed:', err.message);
       return {
         platform: 'youtube',
         success: false,
-        error: 'Video has no OneDrive ID'
+        error: `Failed to download video: ${err.message}`
       };
     }
     
-    const downloadUrl = `https://graph.microsoft.com/v1.0/me/drive/items/${video.onedrive_file_id}/content`;
-    const videoResponse = await fetch(downloadUrl, {
-      headers: { Authorization: `Bearer ${onedriveToken}` }
-    });
-
-    if (!videoResponse.ok) {
-      const errorText = await videoResponse.text();
-      console.error('OneDrive download failed:', videoResponse.status, errorText);
-      return {
-        platform: 'youtube',
-        success: false,
-        error: `Failed to download video from OneDrive: ${videoResponse.status} ${errorText.substring(0, 100)}`
-      };
-    }
-
-    const videoBuffer = await videoResponse.arrayBuffer();
     const videoBytes = new Uint8Array(videoBuffer);
 
     // Upload to YouTube
@@ -642,24 +631,9 @@ async function refreshMetaToken(userId, currentToken) {
  */
 async function postToFacebook(userId, video, connection, accessToken, title, description) {
   try {
-    if (!video.onedrive_file_id) {
-      throw new Error('Video has no OneDrive ID');
-    }
-    
-    const { accessToken: onedriveToken } = await getValidAccessToken(userId);
-    
-    const downloadUrl = `https://graph.microsoft.com/v1.0/me/drive/items/${video.onedrive_file_id}/content`;
-    const videoResponse = await fetch(downloadUrl, {
-      headers: { Authorization: `Bearer ${onedriveToken}` }
-    });
-
-    if (!videoResponse.ok) {
-      const errorText = await videoResponse.text();
-      console.error('OneDrive download failed for Facebook:', videoResponse.status, errorText);
-      throw new Error(`Failed to download video from OneDrive: ${videoResponse.status} ${errorText.substring(0, 100)}`);
-    }
-
-    const videoBuffer = await videoResponse.arrayBuffer();
+    // Download video from storage (Supabase Storage or OneDrive fallback)
+    const { getVideoBuffer } = require('./utils/video-storage');
+    const videoBuffer = await getVideoBuffer(video, userId);
     
     // Initialize upload session
     const initUrl = new URL(`https://graph.facebook.com/v18.0/${connection.account_id}/videos`);
@@ -778,12 +752,13 @@ async function postToInstagram(userId, video, connection, accessToken, title, de
     console.log('Starting Instagram post with Railway transcoding service');
 
     // Get OneDrive download URL
-    const { accessToken: onedriveToken } = await getValidAccessToken(userId);
-    const downloadUrl = `https://graph.microsoft.com/v1.0/me/drive/items/${video.onedrive_file_id}/content`;
+    // Get video URL from storage (Supabase Storage or OneDrive fallback)
+    const { getVideoUrl } = require('./utils/video-storage');
+    const downloadUrl = await getVideoUrl(video, userId);
     
-    // Call transcoding service with OneDrive URL (55s timeout to stay under Netlify 60s limit)
+    // Call transcoding service with video URL (55s timeout to stay under Netlify 60s limit)
     console.log('Sending video to transcoding service:', TRANSCODER_URL);
-    console.log('OneDrive download URL:', downloadUrl);
+    console.log('Video download URL:', downloadUrl);
     
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 55000); // 55 second timeout
@@ -793,8 +768,7 @@ async function postToInstagram(userId, video, connection, accessToken, title, de
       transcodeResponse = await fetch(`${TRANSCODER_URL}/transcode`, {
         method: 'POST',
         headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${onedriveToken}` // Pass OneDrive token for download
+          'Content-Type': 'application/json'
         },
         body: JSON.stringify({ videoUrl: downloadUrl }),
         signal: controller.signal

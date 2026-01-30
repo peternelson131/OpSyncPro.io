@@ -306,8 +306,10 @@ async function handlePost(userId, body) {
   const {
     sessionId,           // From upload session
     productId,
-    onedrive_file_id,   // From OneDrive after upload completes
+    onedrive_file_id,   // From OneDrive after upload completes (legacy)
     onedrive_path,
+    storage_path,        // NEW: Supabase Storage path
+    storage_url,         // NEW: Supabase Storage public URL
     filename,
     file_size,
     mime_type,
@@ -315,9 +317,12 @@ async function handlePost(userId, body) {
     duration_seconds
   } = body;
 
-  // Required fields
-  if (!onedrive_file_id || !filename) {
-    throw new Error('onedrive_file_id and filename are required');
+  // Required fields - either storage_path (new) or onedrive_file_id (legacy)
+  if (!filename) {
+    throw new Error('filename is required');
+  }
+  if (!storage_path && !onedrive_file_id) {
+    throw new Error('Either storage_path or onedrive_file_id is required');
   }
 
   // If sessionId provided, update existing record
@@ -325,7 +330,9 @@ async function handlePost(userId, body) {
     const { data: updated, error } = await supabase
       .from('product_videos')
       .update({
-        onedrive_file_id,
+        storage_path: storage_path || undefined,
+        storage_url: storage_url || undefined,
+        onedrive_file_id: onedrive_file_id || undefined,
         onedrive_path: onedrive_path || undefined,
         filename: filename || undefined,
         file_size: file_size || undefined,
@@ -384,8 +391,10 @@ async function handlePost(userId, body) {
     .insert({
       user_id: userId,
       product_id: productId || null,
-      onedrive_file_id,
-      onedrive_path: onedrive_path || `/${filename}`,
+      storage_path: storage_path || null,
+      storage_url: storage_url || null,
+      onedrive_file_id: onedrive_file_id || null,
+      onedrive_path: onedrive_path || (onedrive_file_id ? `/${filename}` : null),
       filename,
       file_size: file_size || null,
       mime_type: mime_type || null,

@@ -192,27 +192,35 @@ exports.handler = async (event, context) => {
       const dubbedBuffer = Buffer.from(await mediaResponse.arrayBuffer());
       console.log(`Downloaded ${dubbedBuffer.length} bytes`);
 
-      // Create language folder and upload
-      const folder = await ensureLanguageFolder(userId, variant.language);
+      // Upload to Supabase Storage (product-videos bucket)
+      const storagePath = `${userId}/${variant.original_video_id}/dubbed-${variant.language_code}.mp4`;
+      console.log(`Uploading to Supabase Storage: ${storagePath}`);
       
-      const uploadResponse = await graphApiRequest(
-        userId,
-        `/me/drive/items/${folder.id}:/${variant.filename}:/content`,
-        {
-          method: 'PUT',
-          headers: { 'Content-Type': variant.product_videos.mime_type || 'video/mp4' },
-          body: dubbedBuffer
-        }
-      );
+      const { data: uploadData, error: uploadError } = await supabase.storage
+        .from('product-videos')
+        .upload(storagePath, dubbedBuffer, {
+          contentType: variant.product_videos?.mime_type || 'video/mp4',
+          upsert: true
+        });
 
-      console.log(`Uploaded to OneDrive: ${variant.filename}`);
+      if (uploadError) {
+        console.error('Supabase Storage upload failed:', uploadError);
+        return errorResponse(500, `Failed to upload dubbed video: ${uploadError.message}`, headers);
+      }
+
+      // Get public URL
+      const { data: { publicUrl } } = supabase.storage
+        .from('product-videos')
+        .getPublicUrl(storagePath);
+
+      console.log(`Uploaded to Supabase Storage: ${publicUrl}`);
 
       // Update variant record
       await supabase
         .from('video_variants')
         .update({
-          onedrive_file_id: uploadResponse.id,
-          onedrive_path: `${folder.name}/${variant.filename}`,
+          storage_path: storagePath,
+          storage_url: publicUrl,
           file_size: dubbedBuffer.length,
           dub_status: 'complete',
           completed_at: new Date().toISOString()
@@ -221,8 +229,9 @@ exports.handler = async (event, context) => {
 
       return successResponse({
         status: 'complete',
-        message: 'Dubbed video uploaded to OneDrive!',
-        onedrive_path: `${folder.name}/${variant.filename}`,
+        message: 'Dubbed video uploaded to Supabase Storage!',
+        storage_path: storagePath,
+        storage_url: publicUrl,
         file_size: dubbedBuffer.length
       }, headers);
     }

@@ -74,23 +74,9 @@ exports.handler = async (event, context) => {
       return errorResponse(404, 'Video not found', headers);
     }
 
-    // Get video file from OneDrive
-    const onedriveToken = await getAccessToken(userId);
-    if (!onedriveToken) {
-      return errorResponse(400, 'OneDrive not connected', headers);
-    }
-
-    // Download video content
-    const downloadUrl = `https://graph.microsoft.com/v1.0/me/drive/items/${video.onedrive_id}/content`;
-    const videoResponse = await fetch(downloadUrl, {
-      headers: { Authorization: `Bearer ${onedriveToken}` }
-    });
-
-    if (!videoResponse.ok) {
-      return errorResponse(500, 'Failed to download video from OneDrive', headers);
-    }
-
-    const videoBuffer = await videoResponse.arrayBuffer();
+    // Get video file from storage (Supabase Storage or OneDrive fallback)
+    const { getVideoBuffer } = require('./utils/video-storage');
+    const videoBuffer = await getVideoBuffer(video, userId);
     const videoBytes = new Uint8Array(videoBuffer);
 
     // Prepare metadata

@@ -53,51 +53,65 @@ exports.handler = async (event, context) => {
       return errorResponse(404, 'Video not found', headers);
     }
 
-    // Check if video has an OneDrive path or file ID
-    if (!video.onedrive_file_id && !video.onedrive_path) {
-      return errorResponse(400, 'Video not stored in OneDrive', headers);
-    }
-
-    // Get download URL from OneDrive
-    // Use file ID if available (more reliable), otherwise use path
     let downloadUrl;
-    
-    console.log('Video record:', { 
-      id: video.id, 
-      onedrive_file_id: video.onedrive_file_id, 
-      onedrive_path: video.onedrive_path 
-    });
-    
-    if (video.onedrive_file_id) {
-      // Use file ID - this is the OneDrive item ID
-      const result = await graphApiRequest(
-        userId, 
-        `/me/drive/items/${video.onedrive_file_id}`
-      );
+
+    // PRIORITY 1: Check if video is in Supabase Storage (NEW PRIMARY)
+    if (video.storage_url) {
+      console.log('Video stored in Supabase Storage:', { id: video.id, storage_path: video.storage_path });
+      downloadUrl = video.storage_url;
       
-      downloadUrl = result['@microsoft.graph.downloadUrl'];
-    } else if (video.onedrive_path) {
-      // Use path - need to encode special characters but preserve slashes
-      // OneDrive path format: /path/to/file.mp4
-      const pathWithoutLeadingSlash = video.onedrive_path.replace(/^\//, '');
-      const result = await graphApiRequest(
-        userId,
-        `/me/drive/root:/${pathWithoutLeadingSlash}`
-      );
-      
-      downloadUrl = result['@microsoft.graph.downloadUrl'];
+      return successResponse({
+        success: true,
+        downloadUrl,
+        filename: video.filename,
+        fileSize: video.file_size,
+        source: 'supabase-storage'
+      }, headers);
     }
 
-    if (!downloadUrl) {
-      return errorResponse(500, 'Could not generate download URL', headers);
+    // PRIORITY 2: Fallback to OneDrive for legacy videos
+    if (video.onedrive_file_id || video.onedrive_path) {
+      console.log('Video stored in OneDrive (legacy):', { 
+        id: video.id, 
+        onedrive_file_id: video.onedrive_file_id, 
+        onedrive_path: video.onedrive_path 
+      });
+      
+      if (video.onedrive_file_id) {
+        // Use file ID - this is the OneDrive item ID
+        const result = await graphApiRequest(
+          userId, 
+          `/me/drive/items/${video.onedrive_file_id}`
+        );
+        
+        downloadUrl = result['@microsoft.graph.downloadUrl'];
+      } else if (video.onedrive_path) {
+        // Use path - need to encode special characters but preserve slashes
+        // OneDrive path format: /path/to/file.mp4
+        const pathWithoutLeadingSlash = video.onedrive_path.replace(/^\//, '');
+        const result = await graphApiRequest(
+          userId,
+          `/me/drive/root:/${pathWithoutLeadingSlash}`
+        );
+        
+        downloadUrl = result['@microsoft.graph.downloadUrl'];
+      }
+
+      if (!downloadUrl) {
+        return errorResponse(500, 'Could not generate download URL from OneDrive', headers);
+      }
+      
+      return successResponse({
+        success: true,
+        downloadUrl,
+        filename: video.filename,
+        fileSize: video.file_size,
+        source: 'onedrive'
+      }, headers);
     }
 
-    return successResponse({
-      success: true,
-      downloadUrl,
-      filename: video.filename,
-      fileSize: video.file_size
-    }, headers);
+    // PRIORITY 3: No storage location found
+    return errorResponse(400, 'Video has no storage location (neither Supabase nor OneDrive)', headers);
 
   } catch (error) {
     console.error('Error in video-download:', error);

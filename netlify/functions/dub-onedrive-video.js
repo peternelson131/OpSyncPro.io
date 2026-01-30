@@ -142,22 +142,19 @@ exports.handler = async (event, context) => {
       return errorResponse(500, 'Failed to decrypt API key', headers);
     }
 
-    // Step 1: Download video from OneDrive
-    console.log('📥 Downloading from OneDrive...');
-    const { accessToken } = await getValidAccessToken(userId);
+    // Step 1: Download video from storage (Supabase Storage or OneDrive fallback)
+    console.log('📥 Downloading video from storage...');
+    const { getVideoBuffer } = require('./utils/video-storage');
     
-    const downloadUrl = `https://graph.microsoft.com/v1.0/me/drive/items/${video.onedrive_file_id}/content`;
-    const downloadResponse = await fetch(downloadUrl, {
-      headers: { 'Authorization': `Bearer ${accessToken}` }
-    });
-
-    if (!downloadResponse.ok) {
-      await updateVariantStatus(variantId, 'failed', 'Failed to download from OneDrive');
-      return errorResponse(500, 'Failed to download video from OneDrive', headers);
+    let videoBuffer;
+    try {
+      videoBuffer = await getVideoBuffer(video, userId);
+      console.log(`📥 Downloaded ${videoBuffer.length} bytes`);
+    } catch (err) {
+      console.error('Download error:', err.message);
+      await updateVariantStatus(variantId, 'failed', `Failed to download video: ${err.message}`);
+      return errorResponse(500, `Failed to download video: ${err.message}`, headers);
     }
-
-    const videoBuffer = Buffer.from(await downloadResponse.arrayBuffer());
-    console.log(`📥 Downloaded ${videoBuffer.length} bytes`);
 
     // Step 2: Send to Eleven Labs
     console.log('🎬 Sending to Eleven Labs...');

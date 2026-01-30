@@ -6,6 +6,7 @@
 
 const { createClient } = require('@supabase/supabase-js');
 const { getValidAccessToken } = require('./utils/onedrive-api');
+const { getVideoBuffer, getVideoUrl } = require('./utils/video-storage');
 
 const supabase = createClient(
   process.env.SUPABASE_URL,
@@ -158,19 +159,8 @@ async function postToYouTube(userId, video, title, description) {
       }
     }
 
-    // Get video from OneDrive
-    const { accessToken: onedriveToken } = await getValidAccessToken(userId);
-    const downloadUrl = `https://graph.microsoft.com/v1.0/me/drive/items/${video.onedrive_file_id}/content`;
-    
-    const videoResponse = await fetch(downloadUrl, {
-      headers: { Authorization: `Bearer ${onedriveToken}` }
-    });
-
-    if (!videoResponse.ok) {
-      throw new Error('Failed to download from OneDrive');
-    }
-
-    const videoBuffer = await videoResponse.arrayBuffer();
+    // Get video from storage (Supabase Storage or OneDrive fallback)
+    const videoBuffer = await getVideoBuffer(video, userId);
 
     // Upload to YouTube
     const initResponse = await fetch('https://www.googleapis.com/upload/youtube/v3/videos?uploadType=resumable&part=snippet,status', {
@@ -240,18 +230,8 @@ async function refreshGoogleToken(refreshToken) {
 // ============= Facebook =============
 async function postToFacebook(userId, video, connection, accessToken, title, description) {
   try {
-    const { accessToken: onedriveToken } = await getValidAccessToken(userId);
-    const downloadUrl = `https://graph.microsoft.com/v1.0/me/drive/items/${video.onedrive_file_id}/content`;
-    
-    const videoResponse = await fetch(downloadUrl, {
-      headers: { Authorization: `Bearer ${onedriveToken}` }
-    });
-
-    if (!videoResponse.ok) {
-      throw new Error('Failed to download from OneDrive');
-    }
-
-    const videoBuffer = await videoResponse.arrayBuffer();
+    // Get video from storage (Supabase Storage or OneDrive fallback)
+    const videoBuffer = await getVideoBuffer(video, userId);
 
     // Init upload
     const initUrl = new URL(`https://graph.facebook.com/v18.0/${connection.account_id}/videos`);
@@ -336,11 +316,10 @@ async function postToInstagram(jobId, userId, video, connection, accessToken, ti
         throw new Error('TRANSCODER_URL not configured');
       }
 
-      // Stage 1: Downloading from OneDrive
+      // Stage 1: Get video download URL from storage
       await updateJobProgress(jobId, 'downloading', 15);
       
-      const { accessToken: onedriveToken } = await getValidAccessToken(userId);
-      const downloadUrl = `https://graph.microsoft.com/v1.0/me/drive/items/${video.onedrive_file_id}/content`;
+      const downloadUrl = await getVideoUrl(video, userId);
 
       // Stage 2: Transcoding
       await updateJobProgress(jobId, 'transcoding', 30);

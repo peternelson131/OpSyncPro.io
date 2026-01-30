@@ -251,20 +251,9 @@ async function refreshMetaToken(userId, currentToken) {
  */
 async function postToFacebook(userId, video, connection, accessToken, title, description) {
   try {
-    // Get OneDrive access token
-    const { accessToken: onedriveToken } = await getValidAccessToken(userId);
-    
-    // Download video from OneDrive
-    const downloadUrl = `https://graph.microsoft.com/v1.0/me/drive/items/${video.onedrive_id}/content`;
-    const videoResponse = await fetch(downloadUrl, {
-      headers: { Authorization: `Bearer ${onedriveToken}` }
-    });
-
-    if (!videoResponse.ok) {
-      throw new Error('Failed to download video from OneDrive');
-    }
-
-    const videoBuffer = await videoResponse.arrayBuffer();
+    // Download video from storage (Supabase Storage or OneDrive fallback)
+    const { getVideoBuffer } = require('./utils/video-storage');
+    const videoBuffer = await getVideoBuffer(video, userId);
     
     // Upload to Facebook using resumable upload
     // Step 1: Initialize upload session
@@ -386,19 +375,9 @@ async function postToInstagram(userId, video, connection, accessToken, title, de
     if (!videoUrl) {
       console.log('Uploading to Supabase Storage for Instagram');
       
-      const { accessToken: onedriveToken } = await getValidAccessToken(userId);
-      
-      // Download video from OneDrive
-      const downloadUrl = `https://graph.microsoft.com/v1.0/me/drive/items/${video.onedrive_id}/content`;
-      const videoResponse = await fetch(downloadUrl, {
-        headers: { Authorization: `Bearer ${onedriveToken}` }
-      });
-
-      if (!videoResponse.ok) {
-        throw new Error('Failed to download video from OneDrive');
-      }
-
-      const videoBuffer = await videoResponse.arrayBuffer();
+      // Download video from storage (Supabase Storage or OneDrive fallback)
+      const { getVideoBuffer } = require('./utils/video-storage');
+      const videoBuffer = await getVideoBuffer(video, userId);
       
       // Upload to Supabase Storage
       const fileName = `temp/${userId}/${Date.now()}-${video.filename}`;

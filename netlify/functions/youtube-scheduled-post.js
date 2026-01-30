@@ -114,24 +114,17 @@ exports.handler = async (event, context) => {
           }
         }
 
-        // Download video from OneDrive
-        const onedriveToken = await getAccessToken(schedule.user_id);
-        if (!onedriveToken) {
-          console.error(`OneDrive token not found for user ${schedule.user_id}`);
+        // Download video from storage (Supabase Storage or OneDrive fallback)
+        const { getVideoBuffer } = require('./utils/video-storage');
+        
+        let videoBuffer;
+        try {
+          videoBuffer = await getVideoBuffer(unpostedVideo, schedule.user_id);
+        } catch (err) {
+          console.error(`Failed to download video ${unpostedVideo.id}:`, err.message);
           continue;
         }
-
-        const downloadUrl = `https://graph.microsoft.com/v1.0/me/drive/items/${unpostedVideo.onedrive_id}/content`;
-        const videoResponse = await fetch(downloadUrl, {
-          headers: { Authorization: `Bearer ${onedriveToken}` }
-        });
-
-        if (!videoResponse.ok) {
-          console.error(`Failed to download video ${unpostedVideo.id}`);
-          continue;
-        }
-
-        const videoBuffer = await videoResponse.arrayBuffer();
+        
         const videoBytes = new Uint8Array(videoBuffer);
 
         // Prepare metadata
