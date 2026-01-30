@@ -43,7 +43,8 @@ import {
   GripVertical,
   Upload,
   Film,
-  Copy
+  Copy,
+  ImageIcon
 } from 'lucide-react';
 
 // Status configuration with colors matching the database seed
@@ -1695,6 +1696,9 @@ const ProductDetailPanel = ({ product, onClose, onUpdate, onDelete, onOwnersChan
   const [showQuickList, setShowQuickList] = useState(false);
   const [showACFPanel, setShowACFPanel] = useState(false);
   
+  // Thumbnail generation state
+  const [isGeneratingThumbnail, setIsGeneratingThumbnail] = useState(false);
+  
   // Handle panel resize
   useEffect(() => {
     if (!isResizing) return;
@@ -1754,6 +1758,67 @@ const ProductDetailPanel = ({ product, onClose, onUpdate, onDelete, onOwnersChan
       scrollContainerRef.current.scrollTop = 0;
     }
   }, [product?.id]);
+  
+  // Generate thumbnail for this product
+  const handleGenerateThumbnail = async () => {
+    if (!product.image_url || !product.owners?.length) return;
+    
+    setIsGeneratingThumbnail(true);
+    
+    try {
+      const token = (await supabase.auth.getSession()).data.session?.access_token;
+      if (!token) {
+        alert('Not authenticated');
+        return;
+      }
+      
+      // Use primary owner or first owner
+      const primaryOwner = product.owners.find(o => o.is_primary) || product.owners[0];
+      
+      const response = await fetch('/.netlify/functions/generate-thumbnail', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          asin: product.asin,
+          ownerId: primaryOwner.id
+        })
+      });
+      
+      const result = await response.json();
+      
+      if (result.success) {
+        // Save thumbnail URL to product_videos table
+        const { error: saveError } = await supabase
+          .from('product_videos')
+          .upsert({
+            product_id: product.id,
+            thumbnail_url: result.thumbnailUrl,
+            updated_at: new Date().toISOString()
+          }, {
+            onConflict: 'product_id'
+          });
+        
+        if (saveError) {
+          console.error('Failed to save thumbnail URL:', saveError);
+          alert('Thumbnail generated but failed to save: ' + saveError.message);
+        } else {
+          alert('✓ Thumbnail generated successfully!');
+          // Refresh product data
+          onUpdate({});
+        }
+      } else {
+        alert('Failed to generate thumbnail: ' + (result.error || 'Unknown error'));
+      }
+    } catch (err) {
+      console.error('Thumbnail generation error:', err);
+      alert('Failed to generate thumbnail: ' + err.message);
+    } finally {
+      setIsGeneratingThumbnail(false);
+    }
+  };
   
   if (!product) return null;
 
@@ -1962,6 +2027,46 @@ const ProductDetailPanel = ({ product, onClose, onUpdate, onDelete, onOwnersChan
             >
               <Copy className="w-3 h-3" /> Copy to clipboard
             </button>
+          )}
+        </div>
+        
+        {/* Generate Thumbnail */}
+        <div className="space-y-2">
+          <h4 className="text-sm font-medium text-theme-secondary">Thumbnail</h4>
+          <button
+            onClick={handleGenerateThumbnail}
+            disabled={!product.image_url || !product.owners?.length || isGeneratingThumbnail}
+            title={
+              !product.image_url ? 'Product must have an image' :
+              !product.owners?.length ? 'Product must have an assigned owner' :
+              isGeneratingThumbnail ? 'Generating...' :
+              'Generate thumbnail from template'
+            }
+            className={`w-full px-4 py-2 rounded-lg font-medium flex items-center justify-center gap-2 ${
+              !product.image_url || !product.owners?.length
+                ? 'bg-gray-300 dark:bg-gray-700 text-gray-500 dark:text-gray-400 cursor-not-allowed'
+                : isGeneratingThumbnail
+                ? 'bg-orange-400 text-white cursor-wait'
+                : 'bg-orange-600 text-white hover:bg-orange-700'
+            }`}
+          >
+            {isGeneratingThumbnail ? (
+              <>
+                <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                Generating...
+              </>
+            ) : (
+              <>
+                <ImageIcon className="w-4 h-4" />
+                Generate Thumbnail
+              </>
+            )}
+          </button>
+          {(!product.image_url || !product.owners?.length) && (
+            <p className="text-xs text-gray-500 dark:text-gray-400">
+              {!product.image_url && 'Add an image to the product first.'}
+              {product.image_url && !product.owners?.length && 'Assign an owner to the product first.'}
+            </p>
           )}
         </div>
         
@@ -2447,68 +2552,12 @@ export default function ProductCRM({ isPWA = false }) {
         }
       }
       
-      // Auto-generate thumbnails for products with newly assigned owners
-      if ((changes.ownerAction === 'set' || changes.ownerAction === 'add') && changes.ownerIds?.length > 0) {
-        // Fire and forget - don't block the UI
-        generateThumbnailsForProducts(productIds, changes.ownerIds).catch(err => {
-          console.error('Background thumbnail generation error:', err);
-        });
-      }
-      
       setSelectedProducts(new Set());
       setShowBulkEditModal(false);
       fetchProducts();
     } catch (err) {
       console.error('Bulk edit error:', err);
       alert('Failed to update products: ' + err.message);
-    }
-  };
-
-  // Auto-generate thumbnails for products when owners are assigned
-  const generateThumbnailsForProducts = async (productIds, ownerIds) => {
-    const token = (await supabase.auth.getSession()).data.session?.access_token;
-    if (!token) return;
-    
-    console.log(`Generating thumbnails for ${productIds.length} products with ${ownerIds.length} owners`);
-    
-    // Look up ASINs from product IDs (backend expects asin, not product_id)
-    const productAsins = products
-      .filter(p => productIds.includes(p.id))
-      .reduce((map, p) => { map[p.id] = p.asin; return map; }, {});
-    
-    // Generate thumbnail for each product-owner combination
-    for (const productId of productIds) {
-      const asin = productAsins[productId];
-      if (!asin) {
-        console.warn(`No ASIN found for product ${productId}, skipping thumbnail`);
-        continue;
-      }
-      for (const ownerId of ownerIds) {
-        try {
-          const response = await fetch('/.netlify/functions/generate-thumbnail', {
-            method: 'POST',
-            headers: {
-              'Authorization': `Bearer ${token}`,
-              'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({
-              asin: asin,
-              ownerId: ownerId
-            })
-          });
-          
-          const result = await response.json();
-          if (result.success) {
-            console.log(`✓ Thumbnail generated for ${asin} with owner ${ownerId}`);
-          } else if (result.skipped) {
-            console.log(`○ Skipped: ${result.reason}`);
-          } else {
-            console.error(`✗ Failed: ${result.error || 'Unknown error'}`);
-          }
-        } catch (err) {
-          console.error(`Thumbnail generation error for ${asin}:`, err);
-        }
-      }
     }
   };
 
@@ -2647,12 +2696,6 @@ export default function ProductCRM({ isPWA = false }) {
       setProducts(prev => prev.map(p => 
         p.id === productId ? { ...p, owners: ownersWithDetails, video_title: videoTitle || p.video_title } : p
       ));
-      
-      // Auto-generate thumbnails for new owners (fire and forget)
-      if (newOwners.length > 0) {
-        const ownerIds = newOwners.map(o => o.owner_id);
-        generateThumbnailsForProducts([productId], ownerIds);
-      }
       
     } catch (err) {
       console.error('Failed to update owners:', err);

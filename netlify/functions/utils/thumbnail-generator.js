@@ -106,12 +106,12 @@ async function generateThumbnail({ templateId, asin, userId, productImageUrl = n
     const templateBuffer = Buffer.from(await templateData.arrayBuffer());
 
     // 3. Find and download product image
-    const finalProductUrl = productImageUrl || await findProductImageUrl(asin);
+    const finalProductUrl = productImageUrl;
     
     if (!finalProductUrl) {
       return { 
         success: false, 
-        error: 'Product image not found' 
+        error: 'Product has no image. Add an image to the product first.' 
       };
     }
 
@@ -172,13 +172,13 @@ async function generateThumbnail({ templateId, asin, userId, productImageUrl = n
       };
     }
 
-    // 9. Generate signed URL (24-hour expiry)
-    const { data: signedData, error: signedError } = await supabase.storage
+    // 9. Generate public URL (permanent)
+    const { data: publicData } = supabase.storage
       .from('generated-thumbnails')
-      .createSignedUrl(fileName, 86400); // 24 hours
+      .getPublicUrl(fileName);
 
-    if (signedError || !signedData?.signedUrl) {
-      console.error('Failed to create signed URL:', signedError);
+    if (!publicData?.publicUrl) {
+      console.error('Failed to generate public URL');
       return { 
         success: false, 
         error: 'Failed to generate thumbnail URL' 
@@ -187,7 +187,7 @@ async function generateThumbnail({ templateId, asin, userId, productImageUrl = n
 
     return {
       success: true,
-      thumbnailUrl: signedData.signedUrl,
+      thumbnailUrl: publicData.publicUrl,
       storagePath: fileName
     };
 
