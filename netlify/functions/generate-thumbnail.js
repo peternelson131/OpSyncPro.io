@@ -90,11 +90,25 @@ exports.handler = async (event, context) => {
         return errorResponse(404, 'No template found for this owner', headers);
       }
 
+      // Look up product image from sourced_products
+      let productImageUrl = null;
+      const { data: product } = await supabase
+        .from('sourced_products')
+        .select('image_url')
+        .eq('user_id', userId)
+        .eq('asin', asin)
+        .single();
+      
+      if (product?.image_url) {
+        productImageUrl = product.image_url;
+      }
+
       // Generate thumbnail
       const result = await generateThumbnail({
         templateId: template.id,
         asin,
-        userId
+        userId,
+        productImageUrl
       });
 
       if (!result.success) {
