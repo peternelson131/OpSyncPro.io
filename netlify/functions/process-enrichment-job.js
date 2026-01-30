@@ -172,7 +172,26 @@ async function processBatch(asins, userId, jobId, batchNum, totalBatches) {
         .eq('asin', asin);
       
       if (updateError) {
-        console.error(`  ❌ Failed to update ${asin}:`, updateError.message);
+        console.error(`  ❌ Failed to update catalog_imports ${asin}:`, updateError.message);
+      }
+      
+      // Also update sourced_products with enriched data
+      if (data.status === 'enriched') {
+        const sourcedUpdate = {};
+        if (data.title) sourcedUpdate.title = data.title;
+        if (data.image_url) sourcedUpdate.image_url = data.image_url;
+        
+        if (Object.keys(sourcedUpdate).length > 0) {
+          const { error: sourcedError } = await getSupabase()
+            .from('sourced_products')
+            .update(sourcedUpdate)
+            .eq('user_id', userId)
+            .eq('asin', asin);
+          
+          if (sourcedError) {
+            console.error(`  ⚠️ Failed to update sourced_products ${asin}:`, sourcedError.message);
+          }
+        }
       }
     }
     
