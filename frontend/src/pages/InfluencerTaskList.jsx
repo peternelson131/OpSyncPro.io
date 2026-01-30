@@ -523,6 +523,17 @@ export default function InfluencerTaskList() {
                           >
                             <CheckCircle className="w-4 h-4" /> Done
                           </button>
+                          <button
+                            onClick={() => {
+                              if (window.confirm('Delete this task?')) {
+                                updateTask(task.id, 'delete');
+                              }
+                            }}
+                            className="px-3 py-2 text-error/60 hover:text-error text-sm transition-colors flex items-center gap-1"
+                            title="Delete task"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
                         </>
                       ) : (
                         <>

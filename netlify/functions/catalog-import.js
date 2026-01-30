@@ -1156,7 +1156,7 @@ async function handlePost(event, userId, headers) {
         
         // Fire-and-forget trigger to background worker
         try {
-          const workerUrl = `${process.env.URL || 'https://uat.opsyncpro.io'}/.netlify/functions/process-enrichment-job`;
+          const workerUrl = `${process.env.URL || 'https://uat.opsyncpro.io'}/.netlify/functions/process-enrichment-job-background`;
           const url = new URL(workerUrl);
           
           const req = https.request({
