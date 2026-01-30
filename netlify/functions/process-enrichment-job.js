@@ -290,13 +290,23 @@ exports.handler = async (event, context) => {
     
     console.log('✅ Job marked as processing');
     
-    // Get ASINs that need enrichment
-    const { data: catalogItems, error: catalogError } = await getSupabase()
+    // Get ASINs that need enrichment — use stored IDs if available, fall back to pending query
+    let catalogQuery = getSupabase()
       .from('catalog_imports')
-      .select('id, asin')
-      .eq('user_id', job.user_id)
-      .eq('enrichment_status', 'pending')
-      .limit(job.total_count); // Safety limit
+      .select('id, asin');
+    
+    if (job.catalog_import_ids && job.catalog_import_ids.length > 0) {
+      console.log(`📋 Using ${job.catalog_import_ids.length} stored catalog_import_ids`);
+      catalogQuery = catalogQuery.in('id', job.catalog_import_ids);
+    } else {
+      console.log('⚠️ No stored IDs, falling back to pending query');
+      catalogQuery = catalogQuery
+        .eq('user_id', job.user_id)
+        .eq('enrichment_status', 'pending')
+        .limit(job.total_count);
+    }
+    
+    const { data: catalogItems, error: catalogError } = await catalogQuery;
     
     if (catalogError) {
       console.error('Failed to fetch catalog items:', catalogError);

@@ -1135,7 +1135,8 @@ async function handlePost(event, userId, headers) {
           processed_count: 0,
           enriched_count: 0,
           failed_count: 0,
-          status: 'pending'
+          status: 'pending',
+          catalog_import_ids: asinsToEnrich.map(a => a.id)
         })
         .select()
         .single();
