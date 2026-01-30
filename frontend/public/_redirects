@@ -1,0 +1,5 @@
+# Don't redirect API/function calls
+/.netlify/functions/*  /.netlify/functions/:splat  200
+
+# SPA fallback for all other routes
+/*  /index.html  200
