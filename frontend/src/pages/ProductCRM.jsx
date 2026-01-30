@@ -2261,12 +2261,12 @@ export default function ProductCRM({ isPWA = false }) {
     fetchLookups();
   }, [fetchProducts, fetchLookups]);
 
-  // Initialize status filter with all statuses except Delivered and Completed
+  // Initialize status filter with all statuses except Delivered, Completed, and Imported
   useEffect(() => {
     if (statuses.length > 0 && statusFilter.size === 0) {
       const defaultStatuses = new Set(
         statuses
-          .filter(s => s.name !== 'Delivered' && s.name !== 'Completed')
+          .filter(s => s.name !== 'Delivered' && s.name !== 'Completed' && s.name !== 'Imported')
           .map(s => s.id)
       );
       setStatusFilter(defaultStatuses);
@@ -2791,9 +2791,9 @@ export default function ProductCRM({ isPWA = false }) {
             <button
               onClick={() => {
                 setViewMode('open');
-                // Set filter to all statuses EXCEPT Delivered and Completed
+                // Set filter to all statuses EXCEPT Delivered, Completed, and Imported
                 const openStatuses = new Set(
-                  statuses.filter(s => s.name !== 'Delivered' && s.name !== 'Completed').map(s => s.id)
+                  statuses.filter(s => s.name !== 'Delivered' && s.name !== 'Completed' && s.name !== 'Imported').map(s => s.id)
                 );
                 setStatusFilter(openStatuses);
               }}
