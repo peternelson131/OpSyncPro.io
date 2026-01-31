@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useSearchParams } from 'react-router-dom'
+import { toast } from 'react-toastify'
 import { userAPI, authAPI, supabase } from '../lib/supabase'
 import { Shield, MessageSquare, Zap, Settings, User, Loader, Image, Trash2, X, Check, CheckCircle, Undo2, ImagePlus, Edit, Plus, ExternalLink, Clock, Lock, AlertTriangle } from 'lucide-react'
 import ThumbnailTemplateModal from '../components/ThumbnailTemplateModal'
@@ -1443,22 +1444,42 @@ export default function Account() {
                 ? `/.netlify/functions/thumbnail-templates?id=${templateData.id}`
                 : '/.netlify/functions/thumbnail-templates'
               
+              // Transform field names to match backend expectations
+              const requestBody = {
+                ownerId: templateData.owner_id,
+                placementZone: templateData.placement_zone,
+                templateFile: templateData.template_image
+              }
+              
+              // Include id for updates
+              if (templateData.id) {
+                requestBody.id = templateData.id
+              }
+              
               const response = await fetch(url, {
                 method,
                 headers: { 
                   Authorization: `Bearer ${token}`,
                   'Content-Type': 'application/json'
                 },
-                body: JSON.stringify(templateData)
+                body: JSON.stringify(requestBody)
               })
               
-              if (!response.ok) throw new Error('Failed to save template')
+              if (!response.ok) {
+                const errorData = await response.json()
+                throw new Error(errorData.error || 'Failed to save template')
+              }
               
-              refetchTemplates()
+              // Success! Refresh templates and close modal
+              await refetchTemplates()
               setShowTemplateModal(false)
               setEditingTemplate(null)
+              
+              // Show success toast
+              toast.success(templateData.id ? 'Template updated successfully!' : 'Template created successfully!')
             } catch (error) {
               console.error('Save template error:', error)
+              toast.error(`Failed to save template: ${error.message}`)
             }
           }}
         />
