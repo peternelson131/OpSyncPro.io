@@ -5,7 +5,7 @@
  */
 
 import { useState, useEffect, useMemo } from 'react';
-import { createClient } from '@supabase/supabase-js';
+import { supabase } from '../lib/supabase';
 import { 
   Search,
   Filter,
@@ -20,10 +20,7 @@ import {
   ClipboardList
 } from 'lucide-react';
 
-// Initialize Supabase client
-const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-const supabaseServiceKey = import.meta.env.VITE_SUPABASE_SERVICE_KEY;
-const supabaseClient = createClient(supabaseUrl, supabaseServiceKey);
+const supabaseClient = supabase;
 
 // Source badge configurations
 const SOURCE_BADGES = {
