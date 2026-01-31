@@ -5,9 +5,12 @@ import { toast } from 'react-toastify'
 import { userAPI, authAPI, supabase } from '../lib/supabase'
 import { Shield, MessageSquare, Zap, Settings, User, Loader, Image, Trash2, X, Check, CheckCircle, Undo2, ImagePlus, Edit, Plus, ExternalLink, Clock, Lock, AlertTriangle } from 'lucide-react'
 import ThumbnailTemplateModal from '../components/ThumbnailTemplateModal'
+import { useConfirm } from '../hooks/useConfirm'
+import ConfirmModal from '../components/ConfirmModal'
 
 export default function Account() {
   const [searchParams, setSearchParams] = useSearchParams()
+  const { isOpen, props, confirm, handleConfirm, handleCancel } = useConfirm()
   const [activeTab, setActiveTab] = useState('profile')
   const [isEditing, setIsEditing] = useState(false)
   const [profileData, setProfileData] = useState({})
@@ -271,15 +274,40 @@ export default function Account() {
   }
 
   const handleDeleteAccount = async () => {
-    if (window.confirm('Are you sure you want to delete your account? This action cannot be undone.')) {
-      if (window.confirm('This will permanently delete all your listings and data. Are you absolutely sure?')) {
-        alert('Account deletion would be processed. In demo mode, this is simulated.')
-      }
+    const firstConfirm = await confirm({
+      title: 'Delete Account',
+      message: 'Are you sure you want to delete your account? This action cannot be undone.',
+      confirmText: 'Continue',
+      cancelText: 'Cancel',
+      variant: 'danger'
+    });
+    
+    if (!firstConfirm) return;
+    
+    const secondConfirm = await confirm({
+      title: 'Confirm Account Deletion',
+      message: 'This will permanently delete all your listings and data. Are you absolutely sure?',
+      confirmText: 'Delete Everything',
+      cancelText: 'Cancel',
+      variant: 'danger'
+    });
+    
+    if (secondConfirm) {
+      alert('Account deletion would be processed. In demo mode, this is simulated.')
     }
   }
 
   const handleDeleteFeedback = async (feedbackId) => {
-    if (!window.confirm('Are you sure you want to delete this feedback?')) return
+    const confirmed = await confirm({
+      title: 'Delete Feedback',
+      message: 'Are you sure you want to delete this feedback? This action cannot be undone.',
+      confirmText: 'Delete',
+      cancelText: 'Cancel',
+      variant: 'danger'
+    });
+    
+    if (!confirmed) return;
+    
     try {
       const { error } = await supabase.from('feedback').delete().eq('id', feedbackId)
       if (error) throw error
@@ -1425,6 +1453,13 @@ export default function Account() {
           }}
         />
       )}
+
+      <ConfirmModal 
+        isOpen={isOpen} 
+        {...props} 
+        onConfirm={handleConfirm} 
+        onCancel={handleCancel} 
+      />
     </div>
   )
 }

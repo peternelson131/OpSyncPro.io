@@ -2,9 +2,12 @@ import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { strategiesAPI } from '../lib/supabase'
 import { Plus, FileText, Check, X } from 'lucide-react'
+import { useConfirm } from '../hooks/useConfirm'
+import ConfirmModal from '../components/ConfirmModal'
 
 export default function Strategies() {
   const queryClient = useQueryClient()
+  const { isOpen, props, confirm, handleConfirm, handleCancel } = useConfirm()
   const [showModal, setShowModal] = useState(false)
   const [editingRule, setEditingRule] = useState(null)
   const [notification, setNotification] = useState(null)
@@ -105,9 +108,18 @@ export default function Strategies() {
     setEditingRule(null)
   }
 
-  const handleDeleteRule = (id) => {
+  const handleDeleteRule = async (id) => {
     const rule = rules.find(r => r.id === id)
-    if (window.confirm(`Are you sure you want to delete "${rule?.name}"?`)) {
+    
+    const confirmed = await confirm({
+      title: 'Delete Strategy',
+      message: `Are you sure you want to delete "${rule?.name}"? This action cannot be undone.`,
+      confirmText: 'Delete',
+      cancelText: 'Cancel',
+      variant: 'danger'
+    })
+    
+    if (confirmed) {
       deleteStrategyMutation.mutate(id)
     }
   }
@@ -362,6 +374,13 @@ export default function Strategies() {
           </div>
         </div>
       )}
+
+      <ConfirmModal 
+        isOpen={isOpen} 
+        {...props} 
+        onConfirm={handleConfirm} 
+        onCancel={handleCancel} 
+      />
     </div>
   )
 }

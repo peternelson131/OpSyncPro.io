@@ -7,6 +7,8 @@ import { OneDriveConnection } from '../components/onedrive'
 import { toast } from 'react-toastify'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import ComingSoonBadge from '../components/ComingSoonBadge'
+import { useConfirm } from '../hooks/useConfirm'
+import ConfirmModal from '../components/ConfirmModal'
 
 // Category configuration
 const CATEGORIES = [
@@ -80,6 +82,7 @@ function AccordionSection({ category, isOpen, onToggle, children, connectedCount
 
 // eBay Integration Card
 function EbayIntegration({ onStatusChange }) {
+  const { isOpen, props, confirm, handleConfirm, handleCancel } = useConfirm()
   const [status, setStatus] = useState('loading')
   const [message, setMessage] = useState('')
   const [connecting, setConnecting] = useState(false)
@@ -144,7 +147,15 @@ function EbayIntegration({ onStatusChange }) {
   }
 
   const disconnectEbay = async () => {
-    if (!confirm('Are you sure you want to disconnect your eBay account?')) return
+    const confirmed = await confirm({
+      title: 'Disconnect eBay',
+      message: 'Are you sure you want to disconnect your eBay account? You will need to reconnect to sync listings.',
+      confirmText: 'Disconnect',
+      cancelText: 'Cancel',
+      variant: 'warning'
+    })
+    
+    if (!confirmed) return
 
     try {
       const { data: { session } } = await supabase.auth.getSession()
@@ -237,12 +248,20 @@ function EbayIntegration({ onStatusChange }) {
           )}
         </button>
       )}
+
+      <ConfirmModal 
+        isOpen={isOpen} 
+        {...props} 
+        onConfirm={handleConfirm} 
+        onCancel={handleCancel} 
+      />
     </div>
   )
 }
 
 // Keepa Integration Card
 function KeepaIntegration({ onStatusChange }) {
+  const { isOpen, props, confirm, handleConfirm, handleCancel } = useConfirm()
   const [apiKey, setApiKey] = useState('')
   const [existingKey, setExistingKey] = useState(null)
   const [showKey, setShowKey] = useState(false)
@@ -312,7 +331,15 @@ function KeepaIntegration({ onStatusChange }) {
   }
 
   const deleteKey = async () => {
-    if (!confirm('Are you sure you want to delete your Keepa API key?')) return
+    const confirmed = await confirm({
+      title: 'Delete Keepa API Key',
+      message: 'Are you sure you want to delete your Keepa API key? You will need to re-enter it to use Keepa features.',
+      confirmText: 'Delete',
+      cancelText: 'Cancel',
+      variant: 'danger'
+    })
+    
+    if (!confirmed) return
 
     try {
       const { error } = await supabase
@@ -395,12 +422,20 @@ function KeepaIntegration({ onStatusChange }) {
           </button>
         )}
       </div>
+
+      <ConfirmModal 
+        isOpen={isOpen} 
+        {...props} 
+        onConfirm={handleConfirm} 
+        onCancel={handleCancel} 
+      />
     </div>
   )
 }
 
 // Eleven Labs Integration Card
 function ElevenLabsIntegration({ onStatusChange }) {
+  const { isOpen, props, confirm, handleConfirm, handleCancel } = useConfirm()
   const [apiKey, setApiKey] = useState('')
   const [existingKey, setExistingKey] = useState(null)
   const [showKey, setShowKey] = useState(false)
@@ -470,7 +505,15 @@ function ElevenLabsIntegration({ onStatusChange }) {
   }
 
   const deleteKey = async () => {
-    if (!confirm('Are you sure you want to delete your Eleven Labs API key?')) return
+    const confirmed = await confirm({
+      title: 'Delete Eleven Labs API Key',
+      message: 'Are you sure you want to delete your Eleven Labs API key? You will need to re-enter it to use voice synthesis features.',
+      confirmText: 'Delete',
+      cancelText: 'Cancel',
+      variant: 'danger'
+    })
+    
+    if (!confirmed) return
 
     try {
       const { error } = await supabase
@@ -553,6 +596,13 @@ function ElevenLabsIntegration({ onStatusChange }) {
           </button>
         )}
       </div>
+
+      <ConfirmModal 
+        isOpen={isOpen} 
+        {...props} 
+        onConfirm={handleConfirm} 
+        onCancel={handleCancel} 
+      />
     </div>
   )
 }
@@ -651,6 +701,7 @@ function FacebookIntegration({ onStatusChange }) {
 
 // Instagram Integration Card 
 function InstagramIntegration({ onStatusChange }) {
+  const { isOpen, props, confirm, handleConfirm, handleCancel } = useConfirm()
   const [searchParams] = useSearchParams()
   const [isConnecting, setIsConnecting] = useState(false)
   
@@ -719,7 +770,16 @@ function InstagramIntegration({ onStatusChange }) {
   }
 
   const handleDisconnect = async () => {
-    if (!confirm('Are you sure you want to disconnect Instagram?')) return
+    const confirmed = await confirm({
+      title: 'Disconnect Instagram',
+      message: 'Are you sure you want to disconnect Instagram? You will need to reconnect to post content.',
+      confirmText: 'Disconnect',
+      cancelText: 'Cancel',
+      variant: 'warning'
+    })
+    
+    if (!confirmed) return
+    
     try {
       const token = await userAPI.getAuthToken()
       await fetch('/.netlify/functions/social-accounts-disconnect', {
@@ -793,6 +853,13 @@ function InstagramIntegration({ onStatusChange }) {
           )}
         </button>
       </div>
+
+      <ConfirmModal 
+        isOpen={isOpen} 
+        {...props} 
+        onConfirm={handleConfirm} 
+        onCancel={handleCancel} 
+      />
     </div>
   )
 }
@@ -832,6 +899,7 @@ function TikTokIntegration({ onStatusChange }) {
 
 // YouTube Integration Card 
 function YouTubeIntegration({ onStatusChange }) {
+  const { isOpen, props, confirm, handleConfirm, handleCancel } = useConfirm()
   const [searchParams] = useSearchParams()
   const [isConnecting, setIsConnecting] = useState(false)
   
@@ -900,7 +968,16 @@ function YouTubeIntegration({ onStatusChange }) {
   }
 
   const handleDisconnect = async () => {
-    if (!confirm('Are you sure you want to disconnect YouTube?')) return
+    const confirmed = await confirm({
+      title: 'Disconnect YouTube',
+      message: 'Are you sure you want to disconnect YouTube? You will need to reconnect to upload videos.',
+      confirmText: 'Disconnect',
+      cancelText: 'Cancel',
+      variant: 'warning'
+    })
+    
+    if (!confirmed) return
+    
     try {
       const token = await userAPI.getAuthToken()
       await fetch('/.netlify/functions/social-accounts-disconnect', {
@@ -974,6 +1051,13 @@ function YouTubeIntegration({ onStatusChange }) {
           )}
         </button>
       </div>
+
+      <ConfirmModal 
+        isOpen={isOpen} 
+        {...props} 
+        onConfirm={handleConfirm} 
+        onCancel={handleCancel} 
+      />
     </div>
   )
 }

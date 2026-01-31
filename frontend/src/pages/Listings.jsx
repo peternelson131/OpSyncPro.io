@@ -5,6 +5,8 @@ import { listingsAPI, userAPI, supabase } from '../lib/supabase'
 import apiService from '../services/api'
 import { getActiveStrategies, getStrategyById, getStrategyDisplayName, getStrategyDisplayInfo } from '../data/strategies'
 import { Search, X, AlertCircle, Plus, Filter, RefreshCw, Palmtree, CheckCircle } from 'lucide-react'
+import { useConfirm } from '../hooks/useConfirm'
+import ConfirmModal from '../components/ConfirmModal'
 
 // Helper functions for localStorage
 const VALID_COLUMNS = [
@@ -96,6 +98,7 @@ const getStoredItemsPerPage = () => {
 
 export default function Listings() {
   const navigate = useNavigate()
+  const { isOpen, props, confirm, handleConfirm, handleCancel } = useConfirm()
   const [status, setStatus] = useState('Active')
   const [searchTerm, setSearchTerm] = useState('')
   const [sortConfig, setSortConfig] = useState({ key: null, direction: 'asc' })
@@ -396,8 +399,16 @@ export default function Listings() {
   )
 
 
-  const handleDeleteListing = (listingId) => {
-    if (window.confirm('Are you sure you want to close this listing? This will mark it as closed in your local database.')) {
+  const handleDeleteListing = async (listingId) => {
+    const confirmed = await confirm({
+      title: 'Close Listing',
+      message: 'Are you sure you want to close this listing? This will mark it as closed in your local database.',
+      confirmText: 'Close Listing',
+      cancelText: 'Cancel',
+      variant: 'warning'
+    })
+    
+    if (confirmed) {
       endListingMutation.mutate(listingId)
     }
   }
@@ -416,7 +427,16 @@ export default function Listings() {
 
     const listingType = status === 'Ended' ? 'ended' : 'sold-out'
     const confirmMessage = `Close ${listingsToClose.length} ${listingType} listing(s)? This will mark them as closed in your local database.`
-    if (!window.confirm(confirmMessage)) {
+    
+    const confirmed = await confirm({
+      title: 'Close Multiple Listings',
+      message: confirmMessage,
+      confirmText: 'Close Listings',
+      cancelText: 'Cancel',
+      variant: 'warning'
+    })
+    
+    if (!confirmed) {
       return
     }
 
@@ -1635,6 +1655,13 @@ export default function Listings() {
           </div>
         </div>
       )}
+
+      <ConfirmModal 
+        isOpen={isOpen} 
+        {...props} 
+        onConfirm={handleConfirm} 
+        onCancel={handleCancel} 
+      />
     </div>
   )
 }

@@ -8,6 +8,8 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { userAPI, supabase } from '../lib/supabase';
+import { useConfirm } from '../hooks/useConfirm';
+import ConfirmModal from '../components/ConfirmModal';
 
 import CustomizableDropdown from '../components/crm/CustomizableDropdown';
 import OwnerSelector from '../components/crm/OwnerSelector';
@@ -1232,6 +1234,7 @@ const ProductRow = ({ product, isSelected, isChecked, onCheck, onSelect, onEdit 
 
 // Manage Custom Fields Modal
 const ManageCustomFieldsModal = ({ isOpen, onClose, statuses, collaborationTypes, contactSources, onFieldsUpdated }) => {
+  const { isOpen: isConfirmOpen, props, confirm, handleConfirm, handleCancel } = useConfirm();
   const [fieldType, setFieldType] = useState('status');
   const [deletingId, setDeletingId] = useState(null);
   const [usageCounts, setUsageCounts] = useState({});
@@ -1309,7 +1312,15 @@ const ManageCustomFieldsModal = ({ isOpen, onClose, statuses, collaborationTypes
     }
 
     // Confirm deletion
-    if (!confirm(`Are you sure you want to delete "${itemName}"? This action cannot be undone.`)) {
+    const confirmed = await confirm({
+      title: `Delete ${currentConfig.label}`,
+      message: `Are you sure you want to delete "${itemName}"? This action cannot be undone.`,
+      confirmText: 'Delete',
+      cancelText: 'Cancel',
+      variant: 'danger'
+    });
+    
+    if (!confirmed) {
       return;
     }
 
@@ -1441,6 +1452,13 @@ const ManageCustomFieldsModal = ({ isOpen, onClose, statuses, collaborationTypes
             </p>
           </div>
         </div>
+
+        <ConfirmModal 
+          isOpen={isConfirmOpen} 
+          {...props} 
+          onConfirm={handleConfirm} 
+          onCancel={handleCancel} 
+        />
       </div>
     </div>
   );
@@ -1741,6 +1759,8 @@ const BulkEditModal = ({ isOpen, onClose, selectedCount, statuses, availableOwne
 
 // Product Detail Panel
 const ProductDetailPanel = ({ product, onClose, onUpdate, onDelete, onOwnersChange, statuses, collaborationTypes, contactSources, marketplaces }) => {
+  const { isOpen: isConfirmOpen, props, confirm, handleConfirm, handleCancel } = useConfirm();
+  
   // Resizable panel state
   const [panelWidth, setPanelWidth] = useState(() => {
     const saved = localStorage.getItem('crm-panel-width');
@@ -1918,8 +1938,16 @@ const ProductDetailPanel = ({ product, onClose, onUpdate, onDelete, onOwnersChan
           <h3 className="text-lg font-semibold text-theme-primary">Product Details</h3>
           <div className="flex items-center gap-2">
             <button 
-              onClick={() => {
-                if (window.confirm('Are you sure you want to delete this product? This cannot be undone.')) {
+              onClick={async () => {
+                const confirmed = await confirm({
+                  title: 'Delete Product',
+                  message: 'Are you sure you want to delete this product? This cannot be undone.',
+                  confirmText: 'Delete',
+                  cancelText: 'Cancel',
+                  variant: 'danger'
+                });
+                
+                if (confirmed) {
                   onDelete(product.id);
                 }
               }} 
@@ -2302,6 +2330,13 @@ const ProductDetailPanel = ({ product, onClose, onUpdate, onDelete, onOwnersChan
       product={product}
       isOpen={showACFPanel}
       onClose={() => setShowACFPanel(false)}
+    />
+    
+    <ConfirmModal 
+      isOpen={isConfirmOpen} 
+      {...props} 
+      onConfirm={handleConfirm} 
+      onCancel={handleCancel} 
     />
     </>
   );

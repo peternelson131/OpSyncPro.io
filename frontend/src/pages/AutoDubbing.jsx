@@ -8,6 +8,8 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../lib/supabase';
+import { useConfirm } from '../hooks/useConfirm';
+import ConfirmModal from '../components/ConfirmModal';
 import { 
   Upload, 
   Film, 
@@ -360,6 +362,7 @@ function JobHistory({ jobs, onDownload, onDelete, loading }) {
 
 export default function AutoDubbing() {
   const { user } = useAuth();
+  const { isOpen, props, confirm, handleConfirm, handleCancel } = useConfirm();
   const [state, setState] = useState(DubbingState.IDLE);
   const [selectedFile, setSelectedFile] = useState(null);
   const [targetLanguage, setTargetLanguage] = useState('es');
@@ -584,7 +587,15 @@ export default function AutoDubbing() {
   };
 
   const handleDeleteJob = async (jobId) => {
-    if (!confirm('Are you sure you want to delete this job?')) return;
+    const confirmed = await confirm({
+      title: 'Delete Dubbing Job',
+      message: 'Are you sure you want to delete this job? This action cannot be undone.',
+      confirmText: 'Delete',
+      cancelText: 'Cancel',
+      variant: 'danger'
+    });
+    
+    if (!confirmed) return;
 
     try {
       const { data: { session } } = await supabase.auth.getSession();
@@ -825,6 +836,13 @@ export default function AutoDubbing() {
           Dubbed videos are available for download for 7 days after completion.
         </p>
       </div>
+
+      <ConfirmModal 
+        isOpen={isOpen} 
+        {...props} 
+        onConfirm={handleConfirm} 
+        onCancel={handleCancel} 
+      />
     </div>
   );
 }

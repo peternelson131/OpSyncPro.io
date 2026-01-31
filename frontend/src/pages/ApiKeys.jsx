@@ -3,6 +3,8 @@ import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../lib/supabase';
 import { Eye, EyeOff, ExternalLink, CheckCircle, XCircle, AlertCircle, Loader, Link2, Unlink } from 'lucide-react';
 import { OneDriveConnection } from '../components/onedrive';
+import { useConfirm } from '../hooks/useConfirm';
+import ConfirmModal from '../components/ConfirmModal';
 
 // API key services
 const API_SERVICES = [
@@ -122,6 +124,7 @@ function ApiKeyInput({ service, existingKey, onSave, onDelete, saving }) {
 
 function EbayConnectionCard() {
   const { user } = useAuth();
+  const { isOpen, props, confirm, handleConfirm, handleCancel } = useConfirm();
   const [status, setStatus] = useState('loading'); // loading, not_connected, pending, connected, error
   const [message, setMessage] = useState('');
   const [connecting, setConnecting] = useState(false);
@@ -203,7 +206,15 @@ function EbayConnectionCard() {
   };
 
   const disconnectEbay = async () => {
-    if (!confirm('Are you sure you want to disconnect your eBay account?')) return;
+    const confirmed = await confirm({
+      title: 'Disconnect eBay',
+      message: 'Are you sure you want to disconnect your eBay account? You will need to reconnect to sync listings.',
+      confirmText: 'Disconnect',
+      cancelText: 'Cancel',
+      variant: 'warning'
+    });
+    
+    if (!confirmed) return;
 
     try {
       const { data: { session } } = await supabase.auth.getSession();
@@ -315,12 +326,20 @@ function EbayConnectionCard() {
           </button>
         </div>
       )}
+
+      <ConfirmModal 
+        isOpen={isOpen} 
+        {...props} 
+        onConfirm={handleConfirm} 
+        onCancel={handleCancel} 
+      />
     </div>
   );
 }
 
 export default function ApiKeys() {
   const { user } = useAuth();
+  const { isOpen, props, confirm, handleConfirm, handleCancel } = useConfirm();
   const [keys, setKeys] = useState({});
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState({});
@@ -407,7 +426,15 @@ export default function ApiKeys() {
     const existing = keys[serviceId];
     if (!existing?.id) return;
 
-    if (!confirm(`Are you sure you want to delete your ${serviceId} API key?`)) return;
+    const confirmed = await confirm({
+      title: 'Delete API Key',
+      message: `Are you sure you want to delete your ${serviceId} API key? You will need to re-enter it to use ${serviceId} features.`,
+      confirmText: 'Delete',
+      cancelText: 'Cancel',
+      variant: 'danger'
+    });
+    
+    if (!confirmed) return;
 
     try {
       const { error } = await supabase
@@ -487,6 +514,13 @@ export default function ApiKeys() {
           We never share your keys with third parties.
         </p>
       </div>
+
+      <ConfirmModal 
+        isOpen={isOpen} 
+        {...props} 
+        onConfirm={handleConfirm} 
+        onCancel={handleCancel} 
+      />
     </div>
   );
 }
