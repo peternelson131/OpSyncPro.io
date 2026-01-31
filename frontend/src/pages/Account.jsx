@@ -29,6 +29,7 @@ export default function Account() {
   const [showTemplateModal, setShowTemplateModal] = useState(false)
   const [editingTemplate, setEditingTemplate] = useState(null)
   const [deletingTemplateId, setDeletingTemplateId] = useState(null)
+  const [savingTemplate, setSavingTemplate] = useState(false)
   
   // Login control state
   const [loginsDisabled, setLoginsDisabled] = useState(false)
@@ -1368,11 +1369,13 @@ export default function Account() {
         <ThumbnailTemplateModal
           existingTemplate={editingTemplate}
           crmOwners={ownersWithTemplateInfo}
+          isSaving={savingTemplate}
           onClose={() => {
             setShowTemplateModal(false)
             setEditingTemplate(null)
           }}
           onSave={async (templateData) => {
+            setSavingTemplate(true)
             try {
               const token = (await supabase.auth.getSession()).data.session?.access_token
               const method = templateData.id ? 'PUT' : 'POST'
@@ -1416,6 +1419,8 @@ export default function Account() {
             } catch (error) {
               console.error('Save template error:', error)
               toast.error(`Failed to save template: ${error.message}`)
+            } finally {
+              setSavingTemplate(false)
             }
           }}
         />

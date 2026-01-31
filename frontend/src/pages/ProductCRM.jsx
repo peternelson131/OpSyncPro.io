@@ -101,6 +101,64 @@ const ShippingBadge = ({ status }) => {
   );
 };
 
+// Debounced text component for free-form fields
+function DebouncedTextarea({ value, onChange, ...props }) {
+  const [localValue, setLocalValue] = useState(value || '');
+  const timeoutRef = useRef(null);
+  
+  // Sync with external value changes (e.g., product switch)
+  useEffect(() => {
+    setLocalValue(value || '');
+  }, [value]);
+  
+  const handleChange = (e) => {
+    const newValue = e.target.value;
+    setLocalValue(newValue);
+    
+    if (timeoutRef.current) clearTimeout(timeoutRef.current);
+    timeoutRef.current = setTimeout(() => {
+      onChange(newValue);
+    }, 500);
+  };
+  
+  // Cleanup on unmount
+  useEffect(() => {
+    return () => {
+      if (timeoutRef.current) clearTimeout(timeoutRef.current);
+    };
+  }, []);
+  
+  return <textarea value={localValue} onChange={handleChange} {...props} />;
+}
+
+// Same for single-line inputs
+function DebouncedInput({ value, onChange, ...props }) {
+  const [localValue, setLocalValue] = useState(value || '');
+  const timeoutRef = useRef(null);
+  
+  useEffect(() => {
+    setLocalValue(value || '');
+  }, [value]);
+  
+  const handleChange = (e) => {
+    const newValue = e.target.value;
+    setLocalValue(newValue);
+    
+    if (timeoutRef.current) clearTimeout(timeoutRef.current);
+    timeoutRef.current = setTimeout(() => {
+      onChange(newValue);
+    }, 500);
+  };
+  
+  useEffect(() => {
+    return () => {
+      if (timeoutRef.current) clearTimeout(timeoutRef.current);
+    };
+  }, []);
+  
+  return <input value={localValue} onChange={handleChange} {...props} />;
+}
+
 // Tracking Input Component
 const TrackingInput = ({ productId, currentTracking, onUpdate }) => {
   const [isEditing, setIsEditing] = useState(false);
@@ -2010,10 +2068,10 @@ const ProductDetailPanel = ({ product, onClose, onUpdate, onDelete, onOwnersChan
         {/* Video Title */}
         <div className="space-y-2">
           <h4 className="text-sm font-medium text-theme-secondary">Video Title</h4>
-          <input
+          <DebouncedInput
             type="text"
             value={product.video_title || ''}
-            onChange={e => onUpdate({ video_title: e.target.value })}
+            onChange={val => onUpdate({ video_title: val })}
             placeholder="Auto-generated when owner assigned..."
             className="w-full px-3 py-2 border border-theme rounded-lg bg-theme-primary text-theme-primary"
           />
@@ -2092,9 +2150,9 @@ const ProductDetailPanel = ({ product, onClose, onUpdate, onDelete, onOwnersChan
         {/* Requirements */}
         <div className="space-y-1.5 md:space-y-2">
           <h4 className="text-xs md:text-sm font-medium text-theme-secondary">Requirements</h4>
-          <textarea
+          <DebouncedTextarea
             value={product.requirements || ''}
-            onChange={e => onUpdate({ requirements: e.target.value })}
+            onChange={val => onUpdate({ requirements: val })}
             placeholder="Brand requirements..."
             rows={2}
             className="w-full px-2 py-1.5 md:px-3 md:py-2 text-sm border border-theme rounded-lg bg-theme-primary text-theme-primary resize-none"
@@ -2110,9 +2168,9 @@ const ProductDetailPanel = ({ product, onClose, onUpdate, onDelete, onOwnersChan
             onChange={e => onUpdate({ important_date: e.target.value || null })}
             className="w-full px-2 py-1.5 md:px-3 md:py-2 text-sm border border-theme rounded-lg bg-theme-primary text-theme-primary"
           />
-          <textarea
+          <DebouncedTextarea
             value={product.important_date_comment || ''}
-            onChange={e => onUpdate({ important_date_comment: e.target.value })}
+            onChange={val => onUpdate({ important_date_comment: val })}
             placeholder="Date notes..."
             rows={1}
             className="w-full px-2 py-1.5 md:px-3 md:py-2 text-sm border border-theme rounded-lg bg-theme-primary text-theme-primary resize-none"

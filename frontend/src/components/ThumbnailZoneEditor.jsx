@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
-import { X, Save } from 'lucide-react';
+import { X, Save, Loader } from 'lucide-react';
 
 /**
  * ThumbnailZoneEditor Component
@@ -15,6 +15,7 @@ import { X, Save } from 'lucide-react';
 export default function ThumbnailZoneEditor({ 
   templateImage, 
   initialZone = null,
+  isSaving = false,
   onSave, 
   onCancel 
 }) {
@@ -362,12 +363,25 @@ export default function ThumbnailZoneEditor({
 
         {/* Footer */}
         <div className="flex items-center justify-end gap-3 p-6 border-t border-theme">
-          <button onClick={onCancel} className="btn-secondary">
+          <button onClick={onCancel} className="btn-secondary" disabled={isSaving}>
             Cancel
           </button>
-          <button onClick={handleSave} className="btn-primary flex items-center gap-2">
-            <Save size={18} />
-            Save Template
+          <button 
+            onClick={handleSave} 
+            className="btn-primary flex items-center gap-2"
+            disabled={isSaving}
+          >
+            {isSaving ? (
+              <>
+                <Loader size={18} className="animate-spin" />
+                Saving...
+              </>
+            ) : (
+              <>
+                <Save size={18} />
+                Save Template
+              </>
+            )}
           </button>
         </div>
       </div>

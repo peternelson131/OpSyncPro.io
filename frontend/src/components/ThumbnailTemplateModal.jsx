@@ -16,6 +16,7 @@ import ThumbnailZoneEditor from './ThumbnailZoneEditor';
 export default function ThumbnailTemplateModal({ 
   existingTemplate = null, 
   crmOwners = [],  // List of {id, name} from crm_owners table
+  isSaving = false,
   onClose, 
   onSave 
 }) {
@@ -133,6 +134,7 @@ export default function ThumbnailTemplateModal({
       <ThumbnailZoneEditor
         templateImage={templateImage}
         initialZone={existingTemplate?.placement_zone}
+        isSaving={isSaving}
         onSave={handleZoneSave}
         onCancel={() => setShowZoneEditor(false)}
       />
