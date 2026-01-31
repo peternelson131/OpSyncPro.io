@@ -22,8 +22,8 @@ test.describe('Authentication', () => {
     // Verify we're on the Product CRM page
     expect(page.url()).toContain('asin-lookup#product-crm');
     
-    // Verify page loaded successfully by checking for key elements
-    await expect(page.locator('text=Product CRM').or(page.locator('text=Products'))).toBeVisible();
+    // Verify page loaded successfully by checking for the heading
+    await expect(page.getByRole('heading', { name: 'Product CRM' })).toBeVisible();
   });
 
   test('AUTH-02: Password reset page displays correctly', async ({ page }) => {
