@@ -5,7 +5,6 @@ import { toast } from 'react-toastify'
 import { userAPI, authAPI, supabase } from '../lib/supabase'
 import { Shield, MessageSquare, Zap, Settings, User, Loader, Image, Trash2, X, Check, CheckCircle, Undo2, ImagePlus, Edit, Plus, ExternalLink, Clock, Lock, AlertTriangle } from 'lucide-react'
 import ThumbnailTemplateModal from '../components/ThumbnailTemplateModal'
-import FolderPicker from '../components/onedrive/FolderPicker'
 
 export default function Account() {
   const [searchParams, setSearchParams] = useSearchParams()
@@ -30,9 +29,6 @@ export default function Account() {
   const [showTemplateModal, setShowTemplateModal] = useState(false)
   const [editingTemplate, setEditingTemplate] = useState(null)
   const [deletingTemplateId, setDeletingTemplateId] = useState(null)
-  const [thumbnailFolderPath, setThumbnailFolderPath] = useState('')
-  const [thumbnailFolderId, setThumbnailFolderId] = useState('')
-  const [showThumbnailFolderPicker, setShowThumbnailFolderPicker] = useState(false)
   
   // Login control state
   const [loginsDisabled, setLoginsDisabled] = useState(false)
@@ -1245,66 +1241,6 @@ export default function Account() {
                   Add Template
                 </button>
               </div>
-
-              {/* OneDrive Folder Setting */}
-              <div className="bg-theme-primary rounded-lg border border-theme p-4">
-                <div className="flex items-start justify-between gap-4">
-                  <div className="flex-1">
-                    <label className="text-sm font-medium text-theme-primary">OneDrive Thumbnail Folder</label>
-                    <p className="text-xs text-theme-tertiary mt-1">
-                      Generated thumbnails will be saved to this folder in your OneDrive.
-                    </p>
-                    <div className="flex items-center gap-3 mt-3">
-                      <div className="flex-1 px-3 py-2 bg-theme-surface border border-theme rounded-lg text-sm">
-                        {thumbnailFolderPath || <span className="text-theme-tertiary">No folder selected</span>}
-                      </div>
-                      <button
-                        onClick={() => setShowThumbnailFolderPicker(true)}
-                        className="px-4 py-2 text-sm bg-accent text-white rounded-lg hover:bg-accent-hover"
-                      >
-                        Browse OneDrive
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              {/* Folder Picker Modal */}
-              {showThumbnailFolderPicker && (
-                <FolderPicker
-                  onClose={() => setShowThumbnailFolderPicker(false)}
-                  skipSave={true}
-                  onSelect={async (selectedFolder) => {
-                    console.log('Folder selected:', selectedFolder)
-                    const folderId = selectedFolder.id
-                    const folderPath = selectedFolder.path
-                    
-                    setThumbnailFolderId(folderId)
-                    setThumbnailFolderPath(folderPath)
-                    setShowThumbnailFolderPicker(false)
-                    
-                    // Save to user profile
-                    try {
-                      const token = (await supabase.auth.getSession()).data.session?.access_token
-                      const response = await fetch('/.netlify/functions/thumbnail-folder', {
-                        method: 'POST',
-                        headers: {
-                          'Authorization': `Bearer ${token}`,
-                          'Content-Type': 'application/json'
-                        },
-                        body: JSON.stringify({ 
-                          folder_id: folderId,
-                          folder_path: folderPath 
-                        })
-                      })
-                      const result = await response.json()
-                      console.log('Save result:', result)
-                    } catch (err) {
-                      console.error('Failed to save folder:', err)
-                    }
-                  }}
-                />
-              )}
 
               {/* Templates Grid */}
               {isLoadingTemplates ? (

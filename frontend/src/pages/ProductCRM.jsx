@@ -2068,6 +2068,17 @@ const ProductDetailPanel = ({ product, onClose, onUpdate, onDelete, onOwnersChan
               {product.image_url && !product.owners?.length && 'Assign an owner to the product first.'}
             </p>
           )}
+          
+          {/* Thumbnail Preview */}
+          {product.product_videos?.[0]?.thumbnail_url && (
+            <div className="mt-2 rounded-lg overflow-hidden border border-theme">
+              <img 
+                src={product.product_videos[0].thumbnail_url} 
+                alt="Generated thumbnail"
+                className="w-full h-auto"
+              />
+            </div>
+          )}
         </div>
         
         {/* Collaboration Type */}
@@ -2292,7 +2303,7 @@ export default function ProductCRM({ isPWA = false }) {
           contact_source:crm_contact_sources(id, name),
           marketplace:crm_marketplaces(id, name, has_quick_list),
           owners:product_owners(owner_id, is_primary),
-          product_videos(id)
+          product_videos(id, thumbnail_url)
         `)
         .order('created_at', { ascending: false });
       
