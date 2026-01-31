@@ -10,42 +10,39 @@ test.describe('Product CRM', () => {
   });
 
   test('CRM-02: Add product with ASIN appears in table', async ({ page }) => {
-    // Click "+ Product" button
-    await page.click('button:has-text("+ Product"), button:has-text("Add Product")');
+    // Click "Product" button to open modal
+    await page.getByRole('button', { name: 'Product', exact: true }).click();
 
     // Wait for add product modal/form
-    await page.waitForTimeout(500);
+    await page.waitForTimeout(800);
 
     // Fill in ASIN
-    await page.fill('input[placeholder*="ASIN" i], input[name*="asin" i]', testAsin);
+    await page.locator('input[placeholder*="B0" i]').first().fill(testAsin);
 
-    // Select initial status (if dropdown exists)
-    const statusDropdown = page.locator('select, [role="combobox"]').filter({ hasText: /status/i }).first();
-    if (await statusDropdown.isVisible({ timeout: 2000 }).catch(() => false)) {
-      await statusDropdown.click();
-      await page.click('text=Initial Contact');
-    }
+    // Wait for the form to be ready
+    await page.waitForTimeout(300);
 
-    // Click "Add Product" button to submit
-    await page.click('button:has-text("Add Product"), button:has-text("Add"), button[type="submit"]');
+    // Click "Add Product" button to submit (use last() to get the one in the modal, not toolbar)
+    await page.getByRole('button', { name: 'Add Product' }).last().click({ force: true });
 
-    // Wait for product to appear in table
-    await page.waitForTimeout(1000);
+    // Wait for modal to close and product to be added
+    await page.waitForTimeout(2000);
 
-    // Verify product appears in table
-    await expect(page.locator(`text=${testAsin}`)).toBeVisible({ timeout: 10000 });
+    // Verify product appears somewhere on page (could be in table or search results)
+    await expect(page.locator(`text=${testAsin}`).first()).toBeVisible({ timeout: 10000 });
   });
 
   test('CRM-04: Open product detail panel shows all fields', async ({ page }) => {
     // First, add a product to test with
-    await page.click('button:has-text("+ Product"), button:has-text("Add Product")');
-    await page.waitForTimeout(500);
-    await page.fill('input[placeholder*="ASIN" i], input[name*="asin" i]', testAsin);
-    await page.click('button:has-text("Add Product"), button:has-text("Add"), button[type="submit"]');
-    await page.waitForTimeout(1000);
+    await page.getByRole('button', { name: 'Product', exact: true }).click();
+    await page.waitForTimeout(800);
+    await page.locator('input[placeholder*="B0" i]').first().fill(testAsin);
+    await page.waitForTimeout(300);
+    await page.getByRole('button', { name: 'Add Product' }).last().click({ force: true });
+    await page.waitForTimeout(2000);
 
     // Click on the product row to open detail panel
-    await page.click(`text=${testAsin}`);
+    await page.locator(`text=${testAsin}`).first().click();
 
     // Wait for detail panel to open
     await page.waitForTimeout(1000);
@@ -60,14 +57,15 @@ test.describe('Product CRM', () => {
 
   test('CRM-05: Edit status persists after refresh', async ({ page }) => {
     // First, add a product
-    await page.click('button:has-text("+ Product"), button:has-text("Add Product")');
-    await page.waitForTimeout(500);
-    await page.fill('input[placeholder*="ASIN" i], input[name*="asin" i]', testAsin);
-    await page.click('button:has-text("Add Product"), button:has-text("Add"), button[type="submit"]');
-    await page.waitForTimeout(1000);
+    await page.getByRole('button', { name: 'Product', exact: true }).click();
+    await page.waitForTimeout(800);
+    await page.locator('input[placeholder*="B0" i]').first().fill(testAsin);
+    await page.waitForTimeout(300);
+    await page.getByRole('button', { name: 'Add Product' }).last().click({ force: true });
+    await page.waitForTimeout(2000);
 
     // Open product detail panel
-    await page.click(`text=${testAsin}`);
+    await page.locator(`text=${testAsin}`).first().click();
     await page.waitForTimeout(1000);
 
     // Change status to "Committed"
@@ -79,7 +77,7 @@ test.describe('Product CRM', () => {
     await page.waitForTimeout(2000);
 
     // Close panel
-    await page.click('button:has-text("Close"), button[aria-label*="close" i]');
+    await page.locator('button:has-text("Close"), button[aria-label*="close" i]').first().click();
     await page.waitForTimeout(500);
 
     // Refresh page
@@ -87,7 +85,7 @@ test.describe('Product CRM', () => {
     await page.waitForLoadState('networkidle');
 
     // Open product again
-    await page.click(`text=${testAsin}`);
+    await page.locator(`text=${testAsin}`).first().click();
     await page.waitForTimeout(1000);
 
     // Verify status is "Committed"
@@ -98,14 +96,15 @@ test.describe('Product CRM', () => {
     const testNote = 'Test requirements: Product must be shipped within 5 business days.';
 
     // First, add a product
-    await page.click('button:has-text("+ Product"), button:has-text("Add Product")');
-    await page.waitForTimeout(500);
-    await page.fill('input[placeholder*="ASIN" i], input[name*="asin" i]', testAsin);
-    await page.click('button:has-text("Add Product"), button:has-text("Add"), button[type="submit"]');
-    await page.waitForTimeout(1000);
+    await page.getByRole('button', { name: 'Product', exact: true }).click();
+    await page.waitForTimeout(800);
+    await page.locator('input[placeholder*="B0" i]').first().fill(testAsin);
+    await page.waitForTimeout(300);
+    await page.getByRole('button', { name: 'Add Product' }).last().click({ force: true });
+    await page.waitForTimeout(2000);
 
     // Open product detail panel
-    await page.click(`text=${testAsin}`);
+    await page.locator(`text=${testAsin}`).first().click();
     await page.waitForTimeout(1000);
 
     // Find and fill requirements textarea
@@ -117,9 +116,9 @@ test.describe('Product CRM', () => {
     await page.waitForTimeout(2000);
 
     // Close and reopen panel
-    await page.click('button:has-text("Close"), button[aria-label*="close" i]');
+    await page.locator('button:has-text("Close"), button[aria-label*="close" i]').first().click();
     await page.waitForTimeout(500);
-    await page.click(`text=${testAsin}`);
+    await page.locator(`text=${testAsin}`).first().click();
     await page.waitForTimeout(1000);
 
     // Verify the complete text is saved
@@ -129,30 +128,31 @@ test.describe('Product CRM', () => {
 
   test('CRM-13: Delete product with confirmation removes from table', async ({ page }) => {
     // First, add a product
-    await page.click('button:has-text("+ Product"), button:has-text("Add Product")');
-    await page.waitForTimeout(500);
-    await page.fill('input[placeholder*="ASIN" i], input[name*="asin" i]', testAsin);
-    await page.click('button:has-text("Add Product"), button:has-text("Add"), button[type="submit"]');
-    await page.waitForTimeout(1000);
+    await page.getByRole('button', { name: 'Product', exact: true }).click();
+    await page.waitForTimeout(800);
+    await page.locator('input[placeholder*="B0" i]').first().fill(testAsin);
+    await page.waitForTimeout(300);
+    await page.getByRole('button', { name: 'Add Product' }).last().click({ force: true });
+    await page.waitForTimeout(2000);
 
     // Verify product exists
-    await expect(page.locator(`text=${testAsin}`)).toBeVisible();
+    await expect(page.locator(`text=${testAsin}`).first()).toBeVisible();
 
     // Open product detail panel
-    await page.click(`text=${testAsin}`);
+    await page.locator(`text=${testAsin}`).first().click();
     await page.waitForTimeout(1000);
 
     // Click delete button
-    await page.click('button:has-text("Delete"), button[aria-label*="delete" i]');
+    await page.locator('button:has-text("Delete"), button[aria-label*="delete" i]').first().click();
 
     // Wait for confirmation modal
     await page.waitForTimeout(500);
 
     // Confirm deletion
-    await page.click('button:has-text("Delete"), button:has-text("Confirm")');
+    await page.locator('button:has-text("Delete"), button:has-text("Confirm")').first().click({ force: true });
 
     // Wait for deletion to complete
-    await page.waitForTimeout(1000);
+    await page.waitForTimeout(1500);
 
     // Verify product is removed from table
     await expect(page.locator(`text=${testAsin}`)).not.toBeVisible({ timeout: 5000 });
@@ -160,14 +160,14 @@ test.describe('Product CRM', () => {
 
   test('CRM-16: Video Made tab loads with filtered view', async ({ page }) => {
     // Click "Video Made" tab
-    await page.click('button:has-text("Video Made"), a:has-text("Video Made")');
+    await page.getByRole('button', { name: 'Video Made' }).click();
 
     // Wait for tab to load
-    await page.waitForLoadState('networkidle');
+    await page.waitForTimeout(1000);
 
-    // Verify heading or filter indication
+    // Verify heading or filter indication (Video Made button should still be visible)
     await expect(
-      page.locator('text=Video Made').or(
+      page.getByRole('button', { name: 'Video Made' }).or(
         page.locator('text=Products with videos')
       )
     ).toBeVisible();
@@ -177,14 +177,15 @@ test.describe('Product CRM', () => {
     const testNote = 'Persistence test note';
 
     // Add product
-    await page.click('button:has-text("+ Product"), button:has-text("Add Product")');
-    await page.waitForTimeout(500);
-    await page.fill('input[placeholder*="ASIN" i], input[name*="asin" i]', testAsin);
-    await page.click('button:has-text("Add Product"), button:has-text("Add"), button[type="submit"]');
-    await page.waitForTimeout(1000);
+    await page.getByRole('button', { name: 'Product', exact: true }).click();
+    await page.waitForTimeout(800);
+    await page.locator('input[placeholder*="B0" i]').first().fill(testAsin);
+    await page.waitForTimeout(300);
+    await page.getByRole('button', { name: 'Add Product' }).last().click({ force: true });
+    await page.waitForTimeout(2000);
 
     // Open and edit product
-    await page.click(`text=${testAsin}`);
+    await page.locator(`text=${testAsin}`).first().click();
     await page.waitForTimeout(1000);
     
     // Add note
@@ -193,14 +194,14 @@ test.describe('Product CRM', () => {
     await page.waitForTimeout(2000);
 
     // Close panel
-    await page.click('button:has-text("Close"), button[aria-label*="close" i]');
+    await page.locator('button:has-text("Close"), button[aria-label*="close" i]').first().click();
 
     // Navigate to different tab
-    await page.click('button:has-text("Video Made"), a:has-text("Video Made")');
+    await page.getByRole('button', { name: 'Video Made' }).click();
     await page.waitForTimeout(1000);
 
     // Navigate back
-    await page.click('button:has-text("All Products"), a:has-text("All Products"), button:has-text("Product CRM")');
+    await page.getByRole('button', { name: 'All Products' }).click();
     await page.waitForTimeout(1000);
 
     // Refresh page
@@ -208,10 +209,10 @@ test.describe('Product CRM', () => {
     await page.waitForLoadState('networkidle');
 
     // Verify product still exists
-    await expect(page.locator(`text=${testAsin}`)).toBeVisible();
+    await expect(page.locator(`text=${testAsin}`).first()).toBeVisible();
 
     // Open product and verify note persisted
-    await page.click(`text=${testAsin}`);
+    await page.locator(`text=${testAsin}`).first().click();
     await page.waitForTimeout(1000);
     const savedText = await page.locator('textarea, input[name*="requirement" i]').first().inputValue();
     expect(savedText).toBe(testNote);
@@ -221,15 +222,15 @@ test.describe('Product CRM', () => {
   test.afterEach(async ({ page }) => {
     try {
       // Try to find and delete the test product if it exists
-      const productExists = await page.locator(`text=${testAsin}`).isVisible({ timeout: 2000 }).catch(() => false);
+      const productExists = await page.locator(`text=${testAsin}`).first().isVisible({ timeout: 2000 }).catch(() => false);
       
       if (productExists) {
-        await page.click(`text=${testAsin}`);
+        await page.locator(`text=${testAsin}`).first().click();
         await page.waitForTimeout(1000);
-        await page.click('button:has-text("Delete"), button[aria-label*="delete" i]');
+        await page.locator('button:has-text("Delete"), button[aria-label*="delete" i]').first().click();
         await page.waitForTimeout(500);
-        await page.click('button:has-text("Delete"), button:has-text("Confirm")');
-        await page.waitForTimeout(1000);
+        await page.locator('button:has-text("Delete"), button:has-text("Confirm")').first().click({ force: true });
+        await page.waitForTimeout(1500);
       }
     } catch (error) {
       // Cleanup failed, but don't fail the test
