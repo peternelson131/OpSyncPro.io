@@ -2069,16 +2069,6 @@ const ProductDetailPanel = ({ product, onClose, onUpdate, onDelete, onOwnersChan
             </p>
           )}
           
-          {/* Thumbnail Preview */}
-          {product.product_videos?.[0]?.thumbnail_url && (
-            <div className="mt-2 rounded-lg overflow-hidden border border-theme">
-              <img 
-                src={product.product_videos[0].thumbnail_url} 
-                alt="Generated thumbnail"
-                className="w-full h-auto"
-              />
-            </div>
-          )}
         </div>
         
         {/* Collaboration Type */}
@@ -2209,6 +2199,23 @@ const ProductDetailPanel = ({ product, onClose, onUpdate, onDelete, onOwnersChan
             }}
           />
         </div>
+        
+        {/* Thumbnail Preview Section */}
+        {product.product_videos?.[0]?.thumbnail_url && (
+          <div className="space-y-2 pt-4 border-t border-theme">
+            <h4 className="text-sm font-medium text-theme-secondary flex items-center gap-2">
+              <ImageIcon className="w-4 h-4" />
+              Generated Thumbnail
+            </h4>
+            <div className="rounded-lg overflow-hidden border border-theme">
+              <img 
+                src={product.product_videos[0].thumbnail_url} 
+                alt="Generated thumbnail"
+                className="w-full h-auto"
+              />
+            </div>
+          </div>
+        )}
         
         {/* Done button at bottom */}
         <div className="pt-4 border-t border-theme">
