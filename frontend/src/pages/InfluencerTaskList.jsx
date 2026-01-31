@@ -6,6 +6,8 @@
 
 import { useState, useEffect } from 'react';
 import { userAPI } from '../lib/supabase';
+import { useConfirm } from '../hooks/useConfirm';
+import ConfirmModal from '../components/ConfirmModal';
 import { 
   AlertCircle, 
   CheckCircle, 
@@ -51,6 +53,7 @@ const MARKETPLACES = {
 };
 
 export default function InfluencerTaskList() {
+  const { isOpen, props, confirm, handleConfirm, handleCancel } = useConfirm();
   const [tasks, setTasks] = useState([]);
   const [loading, setLoading] = useState(true);
   const [pendingCount, setPendingCount] = useState(0);
@@ -524,8 +527,16 @@ export default function InfluencerTaskList() {
                             <CheckCircle className="w-4 h-4" /> Done
                           </button>
                           <button
-                            onClick={() => {
-                              if (window.confirm('Delete this task?')) {
+                            onClick={async () => {
+                              const confirmed = await confirm({
+                                title: 'Delete Task',
+                                message: 'Are you sure you want to delete this task?',
+                                confirmText: 'Delete',
+                                cancelText: 'Cancel',
+                                variant: 'danger'
+                              });
+                              
+                              if (confirmed) {
                                 updateTask(task.id, 'delete');
                               }
                             }}
@@ -562,6 +573,13 @@ export default function InfluencerTaskList() {
           })}
         </div>
       )}
+
+      <ConfirmModal 
+        isOpen={isOpen} 
+        {...props} 
+        onConfirm={handleConfirm} 
+        onCancel={handleCancel} 
+      />
     </div>
   );
 }

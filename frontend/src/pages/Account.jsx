@@ -1,14 +1,16 @@
 import { useState, useEffect } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useSearchParams } from 'react-router-dom'
+import { toast } from 'react-toastify'
 import { userAPI, authAPI, supabase } from '../lib/supabase'
 import { Shield, MessageSquare, Zap, Settings, User, Loader, Image, Trash2, X, Check, CheckCircle, Undo2, ImagePlus, Edit, Plus, ExternalLink, Clock, Lock, AlertTriangle } from 'lucide-react'
 import ThumbnailTemplateModal from '../components/ThumbnailTemplateModal'
-import FolderPicker from '../components/onedrive/FolderPicker'
-import { toast } from '../utils/toast'
+import { useConfirm } from '../hooks/useConfirm'
+import ConfirmModal from '../components/ConfirmModal'
 
 export default function Account() {
   const [searchParams, setSearchParams] = useSearchParams()
+  const { isOpen, props, confirm, handleConfirm, handleCancel } = useConfirm()
   const [activeTab, setActiveTab] = useState('profile')
   const [isEditing, setIsEditing] = useState(false)
   const [profileData, setProfileData] = useState({})
@@ -30,9 +32,7 @@ export default function Account() {
   const [showTemplateModal, setShowTemplateModal] = useState(false)
   const [editingTemplate, setEditingTemplate] = useState(null)
   const [deletingTemplateId, setDeletingTemplateId] = useState(null)
-  const [thumbnailFolderPath, setThumbnailFolderPath] = useState('')
-  const [thumbnailFolderId, setThumbnailFolderId] = useState('')
-  const [showThumbnailFolderPicker, setShowThumbnailFolderPicker] = useState(false)
+  const [savingTemplate, setSavingTemplate] = useState(false)
   
   // Login control state
   const [loginsDisabled, setLoginsDisabled] = useState(false)
@@ -113,24 +113,11 @@ export default function Account() {
   const { data: crmOwners = [] } = useQuery(
     ['crmOwners'],
     async () => {
-      // Get authenticated user to filter owners
-      const { data: { user } } = await supabase.auth.getUser()
-      if (!user) {
-        console.warn('No authenticated user for CRM owners query')
-        return []
-      }
-      
       const { data, error } = await supabase
         .from('crm_owners')
         .select('id, name')
-        .eq('user_id', user.id)
         .order('name')
-      
-      if (error) {
-        console.error('Failed to fetch CRM owners:', error)
-        throw error
-      }
-      
+      if (error) throw error
       return data || []
     },
     {
@@ -287,15 +274,40 @@ export default function Account() {
   }
 
   const handleDeleteAccount = async () => {
-    if (window.confirm('Are you sure you want to delete your account? This action cannot be undone.')) {
-      if (window.confirm('This will permanently delete all your listings and data. Are you absolutely sure?')) {
-        alert('Account deletion would be processed. In demo mode, this is simulated.')
-      }
+    const firstConfirm = await confirm({
+      title: 'Delete Account',
+      message: 'Are you sure you want to delete your account? This action cannot be undone.',
+      confirmText: 'Continue',
+      cancelText: 'Cancel',
+      variant: 'danger'
+    });
+    
+    if (!firstConfirm) return;
+    
+    const secondConfirm = await confirm({
+      title: 'Confirm Account Deletion',
+      message: 'This will permanently delete all your listings and data. Are you absolutely sure?',
+      confirmText: 'Delete Everything',
+      cancelText: 'Cancel',
+      variant: 'danger'
+    });
+    
+    if (secondConfirm) {
+      alert('Account deletion would be processed. In demo mode, this is simulated.')
     }
   }
 
   const handleDeleteFeedback = async (feedbackId) => {
-    if (!window.confirm('Are you sure you want to delete this feedback?')) return
+    const confirmed = await confirm({
+      title: 'Delete Feedback',
+      message: 'Are you sure you want to delete this feedback? This action cannot be undone.',
+      confirmText: 'Delete',
+      cancelText: 'Cancel',
+      variant: 'danger'
+    });
+    
+    if (!confirmed) return;
+    
     try {
       const { error } = await supabase.from('feedback').delete().eq('id', feedbackId)
       if (error) throw error
@@ -1259,66 +1271,6 @@ export default function Account() {
                 </button>
               </div>
 
-              {/* OneDrive Folder Setting */}
-              <div className="bg-theme-primary rounded-lg border border-theme p-4">
-                <div className="flex items-start justify-between gap-4">
-                  <div className="flex-1">
-                    <label className="text-sm font-medium text-theme-primary">OneDrive Thumbnail Folder</label>
-                    <p className="text-xs text-theme-tertiary mt-1">
-                      Generated thumbnails will be saved to this folder in your OneDrive.
-                    </p>
-                    <div className="flex items-center gap-3 mt-3">
-                      <div className="flex-1 px-3 py-2 bg-theme-surface border border-theme rounded-lg text-sm">
-                        {thumbnailFolderPath || <span className="text-theme-tertiary">No folder selected</span>}
-                      </div>
-                      <button
-                        onClick={() => setShowThumbnailFolderPicker(true)}
-                        className="px-4 py-2 text-sm bg-accent text-white rounded-lg hover:bg-accent-hover"
-                      >
-                        Browse OneDrive
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              {/* Folder Picker Modal */}
-              {showThumbnailFolderPicker && (
-                <FolderPicker
-                  onClose={() => setShowThumbnailFolderPicker(false)}
-                  skipSave={true}
-                  onSelect={async (selectedFolder) => {
-                    console.log('Folder selected:', selectedFolder)
-                    const folderId = selectedFolder.id
-                    const folderPath = selectedFolder.path
-                    
-                    setThumbnailFolderId(folderId)
-                    setThumbnailFolderPath(folderPath)
-                    setShowThumbnailFolderPicker(false)
-                    
-                    // Save to user profile
-                    try {
-                      const token = (await supabase.auth.getSession()).data.session?.access_token
-                      const response = await fetch('/.netlify/functions/thumbnail-folder', {
-                        method: 'POST',
-                        headers: {
-                          'Authorization': `Bearer ${token}`,
-                          'Content-Type': 'application/json'
-                        },
-                        body: JSON.stringify({ 
-                          folder_id: folderId,
-                          folder_path: folderPath 
-                        })
-                      })
-                      const result = await response.json()
-                      console.log('Save result:', result)
-                    } catch (err) {
-                      console.error('Failed to save folder:', err)
-                    }
-                  }}
-                />
-              )}
-
               {/* Templates Grid */}
               {isLoadingTemplates ? (
                 <div className="flex items-center justify-center py-12">
@@ -1445,11 +1397,13 @@ export default function Account() {
         <ThumbnailTemplateModal
           existingTemplate={editingTemplate}
           crmOwners={ownersWithTemplateInfo}
+          isSaving={savingTemplate}
           onClose={() => {
             setShowTemplateModal(false)
             setEditingTemplate(null)
           }}
           onSave={async (templateData) => {
+            setSavingTemplate(true)
             try {
               const token = (await supabase.auth.getSession()).data.session?.access_token
               const method = templateData.id ? 'PUT' : 'POST'
@@ -1457,12 +1411,16 @@ export default function Account() {
                 ? `/.netlify/functions/thumbnail-templates?id=${templateData.id}`
                 : '/.netlify/functions/thumbnail-templates'
               
-              // Transform snake_case to camelCase for backend
-              const payload = {
+              // Transform field names to match backend expectations
+              const requestBody = {
                 ownerId: templateData.owner_id,
-                templateFile: templateData.template_image,
                 placementZone: templateData.placement_zone,
-                id: templateData.id
+                templateFile: templateData.template_image
+              }
+              
+              // Include id for updates
+              if (templateData.id) {
+                requestBody.id = templateData.id
               }
               
               const response = await fetch(url, {
@@ -1471,24 +1429,37 @@ export default function Account() {
                   Authorization: `Bearer ${token}`,
                   'Content-Type': 'application/json'
                 },
-                body: JSON.stringify(payload)
+                body: JSON.stringify(requestBody)
               })
               
-              if (!response.ok) throw new Error('Failed to save template')
+              if (!response.ok) {
+                const errorData = await response.json()
+                throw new Error(errorData.error || 'Failed to save template')
+              }
               
-              // Wait for template list to refresh before closing modal
+              // Success! Refresh templates and close modal
               await refetchTemplates()
-              
-              toast.success('Template saved successfully')
               setShowTemplateModal(false)
               setEditingTemplate(null)
+              
+              // Show success toast
+              toast.success(templateData.id ? 'Template updated successfully!' : 'Template created successfully!')
             } catch (error) {
               console.error('Save template error:', error)
-              toast.error('Failed to save template: ' + error.message)
+              toast.error(`Failed to save template: ${error.message}`)
+            } finally {
+              setSavingTemplate(false)
             }
           }}
         />
       )}
+
+      <ConfirmModal 
+        isOpen={isOpen} 
+        {...props} 
+        onConfirm={handleConfirm} 
+        onCancel={handleCancel} 
+      />
     </div>
   )
 }

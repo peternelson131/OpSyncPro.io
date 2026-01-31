@@ -9,6 +9,8 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { useDropzone } from 'react-dropzone';
 import * as XLSX from 'xlsx';
 import { userAPI, supabase } from '../lib/supabase';
+import { useConfirm } from '../hooks/useConfirm';
+import ConfirmModal from '../components/ConfirmModal';
 import { 
   Upload,
   FileSpreadsheet,
@@ -48,6 +50,8 @@ const isValidAsin = (value) => {
 };
 
 export default function CatalogImport() {
+  const { isOpen, props, confirm, handleConfirm, handleCancel } = useConfirm();
+  
   // State
   const [imports, setImports] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -471,7 +475,15 @@ export default function CatalogImport() {
 
   // Delete import
   const handleDelete = async (importId) => {
-    if (!confirm('Are you sure you want to delete this import?')) return;
+    const confirmed = await confirm({
+      title: 'Delete Import',
+      message: 'Are you sure you want to delete this import? This action cannot be undone.',
+      confirmText: 'Delete',
+      cancelText: 'Cancel',
+      variant: 'danger'
+    });
+    
+    if (!confirmed) return;
     
     try {
       const token = await userAPI.getAuthToken();
@@ -1190,6 +1202,13 @@ export default function CatalogImport() {
           </div>
         </div>
       )}
+
+      <ConfirmModal 
+        isOpen={isOpen} 
+        {...props} 
+        onConfirm={handleConfirm} 
+        onCancel={handleCancel} 
+      />
     </div>
   );
 }

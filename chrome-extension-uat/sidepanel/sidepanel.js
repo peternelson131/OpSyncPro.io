@@ -283,12 +283,12 @@ async function loadTasks() {
       throw new Error(data.error || 'Failed to load tasks');
     }
     
-    // Filter out tasks without videos - only show actionable tasks
-    tasks = (data.tasks || []).filter(task => task.video && task.video.id);
+    // Show all tasks, including imported units without videos yet
+    tasks = data.tasks || [];
     
-    // Update pending count (only tasks with videos are shown)
-    const actionablePending = tasks.filter(t => t.status === 'pending').length;
-    pendingCount.textContent = actionablePending;
+    // Update pending count (all pending tasks)
+    const totalPending = tasks.filter(t => t.status === 'pending').length;
+    pendingCount.textContent = totalPending;
     renderTasks();
     
   } catch (error) {
@@ -319,8 +319,8 @@ function renderTasks() {
   
   emptyState.classList.add('hidden');
   
-  // Group tasks by video ID
-  const videoGroups = groupTasksByVideo(filtered);
+  // Group tasks by parent ASIN (search_asin)
+  const videoGroups = groupTasksByParent(filtered);
   
   // Render grouped tasks
   taskList.innerHTML = videoGroups.map(group => createVideoGroup(group)).join('');
@@ -343,38 +343,47 @@ function renderTasks() {
   });
 }
 
-function groupTasksByVideo(tasks) {
+function groupTasksByParent(tasks) {
   const groups = {};
   
   tasks.forEach(task => {
-    // All tasks should have videos at this point due to filtering in loadTasks()
-    if (task.video?.id) {
-      if (!groups[task.video.id]) {
-        groups[task.video.id] = {
-          videoId: task.video.id,
-          filename: task.video.filename,
-          onedrivePath: task.video.onedrive_path,
-          tasks: []
-        };
-      }
-      groups[task.video.id].tasks.push(task);
+    const parentKey = task.search_asin || task.asin; // fallback to own asin if no parent
+    if (!groups[parentKey]) {
+      groups[parentKey] = {
+        parentAsin: parentKey,
+        videoId: task.video?.id || null,
+        filename: task.video?.filename || null,
+        onedrivePath: task.video?.onedrive_path || null,
+        tasks: []
+      };
     }
+    // If this task has video info and the group doesn't yet, add it
+    if (task.video?.id && !groups[parentKey].videoId) {
+      groups[parentKey].videoId = task.video.id;
+      groups[parentKey].filename = task.video.filename;
+      groups[parentKey].onedrivePath = task.video.onedrive_path;
+    }
+    groups[parentKey].tasks.push(task);
   });
   
-  // Convert to array of video groups
   return Object.values(groups);
 }
 
 function createVideoGroup(group) {
-  // All groups have videos now (filtered in loadTasks)
   const taskCount = group.tasks.length;
   const multipleAsins = taskCount > 1;
+  const hasVideo = !!group.videoId;
   
-  // Extract parent ASIN from video filename (e.g., "B0FQFB8FMG.mov" -> "B0FQFB8FMG")
-  const parentAsin = group.filename ? group.filename.replace(/\.[^/.]+$/, '') : null;
+  // Use parent ASIN from group (no longer extracting from filename)
+  const parentAsin = group.parentAsin;
   
   // Get first task's title as the product title (they all share the same video/product)
   const productTitle = group.tasks[0]?.title || group.tasks[0]?.video_title || 'Untitled Product';
+  
+  // Video status display
+  const videoStatus = hasVideo 
+    ? `<span class="video-filename">${escapeHtml(group.filename)}</span>`
+    : `<span class="video-filename" style="color: #999; font-style: italic;">No video yet</span>`;
   
   return `
     <div class="video-group">
@@ -389,11 +398,11 @@ function createVideoGroup(group) {
             <svg class="icon-sm" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
             </svg>
-            <span class="video-filename">${escapeHtml(group.filename)}</span>
+            ${videoStatus}
             <span class="child-count">${taskCount} upload${taskCount !== 1 ? 's' : ''}</span>
           </div>
         </div>
-        <button class="btn btn-download" data-video-id="${group.videoId}" data-filename="${escapeHtml(group.filename)}" data-asins="${group.tasks.map(t => t.asin).join(',')}">
+        <button class="btn btn-download" ${!hasVideo ? 'disabled' : ''} data-video-id="${group.videoId || ''}" data-filename="${escapeHtml(group.filename || '')}" data-asins="${group.tasks.map(t => t.asin).join(',')}">
           <svg class="icon-sm" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
           </svg>
@@ -557,6 +566,12 @@ async function handleComplete(taskId) {
 }
 
 async function handleDownloadAll(videoId, filename, asinsStr) {
+  // Check if video exists
+  if (!videoId) {
+    showNotification('No video available for download yet', 'error');
+    return;
+  }
+  
   showNotification('Preparing downloads...', 'info');
   
   const asins = asinsStr ? asinsStr.split(',') : [];

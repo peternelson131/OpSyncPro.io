@@ -8,6 +8,8 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { userAPI, supabase } from '../lib/supabase';
+import { useConfirm } from '../hooks/useConfirm';
+import ConfirmModal from '../components/ConfirmModal';
 
 import CustomizableDropdown from '../components/crm/CustomizableDropdown';
 import OwnerSelector from '../components/crm/OwnerSelector';
@@ -100,6 +102,64 @@ const ShippingBadge = ({ status }) => {
     </span>
   );
 };
+
+// Debounced text component for free-form fields
+function DebouncedTextarea({ value, onChange, ...props }) {
+  const [localValue, setLocalValue] = useState(value || '');
+  const timeoutRef = useRef(null);
+  
+  // Sync with external value changes (e.g., product switch)
+  useEffect(() => {
+    setLocalValue(value || '');
+  }, [value]);
+  
+  const handleChange = (e) => {
+    const newValue = e.target.value;
+    setLocalValue(newValue);
+    
+    if (timeoutRef.current) clearTimeout(timeoutRef.current);
+    timeoutRef.current = setTimeout(() => {
+      onChange(newValue);
+    }, 500);
+  };
+  
+  // Cleanup on unmount
+  useEffect(() => {
+    return () => {
+      if (timeoutRef.current) clearTimeout(timeoutRef.current);
+    };
+  }, []);
+  
+  return <textarea value={localValue} onChange={handleChange} {...props} />;
+}
+
+// Same for single-line inputs
+function DebouncedInput({ value, onChange, ...props }) {
+  const [localValue, setLocalValue] = useState(value || '');
+  const timeoutRef = useRef(null);
+  
+  useEffect(() => {
+    setLocalValue(value || '');
+  }, [value]);
+  
+  const handleChange = (e) => {
+    const newValue = e.target.value;
+    setLocalValue(newValue);
+    
+    if (timeoutRef.current) clearTimeout(timeoutRef.current);
+    timeoutRef.current = setTimeout(() => {
+      onChange(newValue);
+    }, 500);
+  };
+  
+  useEffect(() => {
+    return () => {
+      if (timeoutRef.current) clearTimeout(timeoutRef.current);
+    };
+  }, []);
+  
+  return <input value={localValue} onChange={handleChange} {...props} />;
+}
 
 // Tracking Input Component
 const TrackingInput = ({ productId, currentTracking, onUpdate }) => {
@@ -1174,6 +1234,7 @@ const ProductRow = ({ product, isSelected, isChecked, onCheck, onSelect, onEdit 
 
 // Manage Custom Fields Modal
 const ManageCustomFieldsModal = ({ isOpen, onClose, statuses, collaborationTypes, contactSources, onFieldsUpdated }) => {
+  const { isOpen: isConfirmOpen, props, confirm, handleConfirm, handleCancel } = useConfirm();
   const [fieldType, setFieldType] = useState('status');
   const [deletingId, setDeletingId] = useState(null);
   const [usageCounts, setUsageCounts] = useState({});
@@ -1251,7 +1312,15 @@ const ManageCustomFieldsModal = ({ isOpen, onClose, statuses, collaborationTypes
     }
 
     // Confirm deletion
-    if (!confirm(`Are you sure you want to delete "${itemName}"? This action cannot be undone.`)) {
+    const confirmed = await confirm({
+      title: `Delete ${currentConfig.label}`,
+      message: `Are you sure you want to delete "${itemName}"? This action cannot be undone.`,
+      confirmText: 'Delete',
+      cancelText: 'Cancel',
+      variant: 'danger'
+    });
+    
+    if (!confirmed) {
       return;
     }
 
@@ -1383,6 +1452,13 @@ const ManageCustomFieldsModal = ({ isOpen, onClose, statuses, collaborationTypes
             </p>
           </div>
         </div>
+
+        <ConfirmModal 
+          isOpen={isConfirmOpen} 
+          {...props} 
+          onConfirm={handleConfirm} 
+          onCancel={handleCancel} 
+        />
       </div>
     </div>
   );
@@ -1683,6 +1759,8 @@ const BulkEditModal = ({ isOpen, onClose, selectedCount, statuses, availableOwne
 
 // Product Detail Panel
 const ProductDetailPanel = ({ product, onClose, onUpdate, onDelete, onOwnersChange, statuses, collaborationTypes, contactSources, marketplaces }) => {
+  const { isOpen: isConfirmOpen, props, confirm, handleConfirm, handleCancel } = useConfirm();
+  
   // Resizable panel state
   const [panelWidth, setPanelWidth] = useState(() => {
     const saved = localStorage.getItem('crm-panel-width');
@@ -1882,8 +1960,16 @@ const ProductDetailPanel = ({ product, onClose, onUpdate, onDelete, onOwnersChan
           <h3 className="text-lg font-semibold text-theme-primary">Product Details</h3>
           <div className="flex items-center gap-2">
             <button 
-              onClick={() => {
-                if (window.confirm('Are you sure you want to delete this product? This cannot be undone.')) {
+              onClick={async () => {
+                const confirmed = await confirm({
+                  title: 'Delete Product',
+                  message: 'Are you sure you want to delete this product? This cannot be undone.',
+                  confirmText: 'Delete',
+                  cancelText: 'Cancel',
+                  variant: 'danger'
+                });
+                
+                if (confirmed) {
                   onDelete(product.id);
                 }
               }} 
@@ -2032,10 +2118,10 @@ const ProductDetailPanel = ({ product, onClose, onUpdate, onDelete, onOwnersChan
         {/* Video Title */}
         <div className="space-y-2">
           <h4 className="text-sm font-medium text-theme-secondary">Video Title</h4>
-          <input
+          <DebouncedInput
             type="text"
             value={product.video_title || ''}
-            onChange={e => onUpdate({ video_title: e.target.value })}
+            onChange={val => onUpdate({ video_title: val })}
             placeholder="Auto-generated when owner assigned..."
             className="w-full px-3 py-2 border border-theme rounded-lg bg-theme-primary text-theme-primary"
           />
@@ -2090,6 +2176,7 @@ const ProductDetailPanel = ({ product, onClose, onUpdate, onDelete, onOwnersChan
               {product.image_url && !product.owners?.length && 'Assign an owner to the product first.'}
             </p>
           )}
+          
         </div>
         
         {/* Collaboration Type */}
@@ -2113,9 +2200,9 @@ const ProductDetailPanel = ({ product, onClose, onUpdate, onDelete, onOwnersChan
         {/* Requirements */}
         <div className="space-y-1.5 md:space-y-2">
           <h4 className="text-xs md:text-sm font-medium text-theme-secondary">Requirements</h4>
-          <textarea
+          <DebouncedTextarea
             value={product.requirements || ''}
-            onChange={e => onUpdate({ requirements: e.target.value })}
+            onChange={val => onUpdate({ requirements: val })}
             placeholder="Brand requirements..."
             rows={2}
             className="w-full px-2 py-1.5 md:px-3 md:py-2 text-sm border border-theme rounded-lg bg-theme-primary text-theme-primary resize-none"
@@ -2131,9 +2218,9 @@ const ProductDetailPanel = ({ product, onClose, onUpdate, onDelete, onOwnersChan
             onChange={e => onUpdate({ important_date: e.target.value || null })}
             className="w-full px-2 py-1.5 md:px-3 md:py-2 text-sm border border-theme rounded-lg bg-theme-primary text-theme-primary"
           />
-          <textarea
+          <DebouncedTextarea
             value={product.important_date_comment || ''}
-            onChange={e => onUpdate({ important_date_comment: e.target.value })}
+            onChange={val => onUpdate({ important_date_comment: val })}
             placeholder="Date notes..."
             rows={1}
             className="w-full px-2 py-1.5 md:px-3 md:py-2 text-sm border border-theme rounded-lg bg-theme-primary text-theme-primary resize-none"
@@ -2221,6 +2308,23 @@ const ProductDetailPanel = ({ product, onClose, onUpdate, onDelete, onOwnersChan
           />
         </div>
         
+        {/* Thumbnail Preview Section */}
+        {product.product_videos?.[0]?.thumbnail_url && (
+          <div className="space-y-2 pt-4 border-t border-theme">
+            <h4 className="text-sm font-medium text-theme-secondary flex items-center gap-2">
+              <ImageIcon className="w-4 h-4" />
+              Generated Thumbnail
+            </h4>
+            <div className="rounded-lg overflow-hidden border border-theme">
+              <img 
+                src={product.product_videos[0].thumbnail_url} 
+                alt="Generated thumbnail"
+                className="w-full h-auto"
+              />
+            </div>
+          </div>
+        )}
+        
         {/* Done button at bottom */}
         <div className="pt-4 border-t border-theme">
           <button
@@ -2248,6 +2352,13 @@ const ProductDetailPanel = ({ product, onClose, onUpdate, onDelete, onOwnersChan
       product={product}
       isOpen={showACFPanel}
       onClose={() => setShowACFPanel(false)}
+    />
+    
+    <ConfirmModal 
+      isOpen={isConfirmOpen} 
+      {...props} 
+      onConfirm={handleConfirm} 
+      onCancel={handleCancel} 
     />
     </>
   );
@@ -2314,7 +2425,7 @@ export default function ProductCRM({ isPWA = false }) {
           contact_source:crm_contact_sources(id, name),
           marketplace:crm_marketplaces(id, name, has_quick_list),
           owners:product_owners(owner_id, is_primary),
-          product_videos(id)
+          product_videos(id, thumbnail_url)
         `)
         .order('created_at', { ascending: false });
       

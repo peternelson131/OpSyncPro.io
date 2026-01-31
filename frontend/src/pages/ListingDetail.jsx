@@ -10,11 +10,14 @@ import {
   ChartBarIcon,
   ClockIcon
 } from '@heroicons/react/24/outline'
+import { useConfirm } from '../hooks/useConfirm'
+import ConfirmModal from '../components/ConfirmModal'
 
 export default function ListingDetail() {
   const { id } = useParams()
   const navigate = useNavigate()
   const queryClient = useQueryClient()
+  const { isOpen, props, confirm, handleConfirm, handleCancel } = useConfirm()
   const [showSettings, setShowSettings] = useState(false)
 
   const { data: listing, isLoading } = useQuery(
@@ -63,8 +66,16 @@ export default function ListingDetail() {
     updateMutation.mutate(data)
   }
 
-  const handleReducePrice = (customPrice = null) => {
-    if (window.confirm(`Are you sure you want to reduce the price${customPrice ? ` to $${customPrice}` : ''}?`)) {
+  const handleReducePrice = async (customPrice = null) => {
+    const confirmed = await confirm({
+      title: 'Reduce Price',
+      message: `Are you sure you want to reduce the price${customPrice ? ` to $${customPrice}` : ''}?`,
+      confirmText: 'Reduce Price',
+      cancelText: 'Cancel',
+      variant: 'warning'
+    })
+    
+    if (confirmed) {
       reducePriceMutation.mutate({ listingId: id, customPrice })
     }
   }
@@ -384,6 +395,13 @@ export default function ListingDetail() {
           )}
         </div>
       </div>
+
+      <ConfirmModal 
+        isOpen={isOpen} 
+        {...props} 
+        onConfirm={handleConfirm} 
+        onCancel={handleCancel} 
+      />
     </div>
   )
 }
