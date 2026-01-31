@@ -4,7 +4,8 @@
   "description": "eBay automated price reduction application",
   "scripts": {
     "test-ebay": "node test-ebay-local.js",
-    "dev": "netlify dev"
+    "dev": "netlify dev",
+    "test:e2e": "npx playwright test"
   },
   "dependencies": {
     "@sentry/node": "^10.38.0",
@@ -15,6 +16,7 @@
     "xml2js": "^0.6.2"
   },
   "devDependencies": {
+    "@playwright/test": "^1.58.1",
     "@supabase/supabase-js": "^2.90.1",
     "dotenv": "^17.2.3",
     "netlify-cli": "^17.38.1",
