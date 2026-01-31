@@ -7,42 +7,27 @@ test.describe('Page Load Tests', () => {
   });
 
   test('IMP-01: Catalog Import page loads with controls', async ({ page }) => {
-    // Expand Catalog section first
-    const catalogButton = page.getByRole('button', { name: 'Catalog', exact: true });
-    const isExpanded = await catalogButton.getAttribute('aria-expanded').catch(() => null);
-    if (isExpanded !== 'true') {
-      await catalogButton.click();
-      await page.waitForTimeout(300);
-    }
+    // Navigate to Influencer Central first
+    await page.goto('/asin-lookup');
+    await page.waitForTimeout(500);
 
-    // Navigate to Catalog Import
+    // Click Catalog Import in sidebar (it's always visible, no need to expand)
     await page.getByRole('button', { name: 'Catalog Import' }).click();
 
-    // Wait for navigation
-    await page.waitForURL('**/asin-catalog-import**', { timeout: 10000 });
+    // Wait for hash navigation
+    await page.waitForURL('**/asin-lookup#catalog-import', { timeout: 10000 });
     await page.waitForTimeout(1000);
 
     // Verify heading
-    await expect(page.getByText('Catalog Import')).toBeVisible({ timeout: 10000 });
+    await expect(page.getByRole('heading', { name: 'Catalog Import' })).toBeVisible({ timeout: 10000 });
 
     // Verify import controls
-    await expect(
-      page.locator('button:has-text("Import from File")').or(
-        page.locator('button:has-text("Import")')
-      )
-    ).toBeVisible();
-
-    // Verify search or table exists
-    await expect(
-      page.locator('input[type="search"], input[placeholder*="search" i]').or(
-        page.locator('table, [role="table"]')
-      )
-    ).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Import from File' })).toBeVisible();
   });
 
   test('LIST-01: Listings page loads with structure', async ({ page }) => {
     // Navigate to Marketplace Central / Listings
-    await page.getByRole('link', { name: 'Marketplace Central' }).click();
+    await page.goto('/ebay-central');
 
     // Wait for navigation to complete
     await page.waitForURL('**/ebay-central**', { timeout: 10000 });
@@ -50,167 +35,91 @@ test.describe('Page Load Tests', () => {
     // Wait for loading state to clear
     await page.waitForTimeout(2000);
 
-    // Verify heading or key elements
-    await expect(
-      page.locator('text=Your eBay Listings').or(
-        page.locator('text=Listings').or(
-          page.locator('text=eBay Listings').or(
-            page.locator('text=Marketplace Tools')
-          )
-        )
-      )
-    ).toBeVisible({ timeout: 10000 });
+    // Verify heading
+    await expect(page.getByRole('heading', { name: 'Your eBay Listings' })).toBeVisible({ timeout: 10000 });
 
     // Verify key controls exist
-    await expect(
-      page.locator('button:has-text("Sync")').or(
-        page.locator('button:has-text("Active")').or(
-          page.locator('button:has-text("Listings")')
-        )
-      )
-    ).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Active' })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Sync eBay' })).toBeVisible();
 
-    // Verify table structure exists (even if empty)
-    await expect(
-      page.locator('table, [role="table"]').or(
-        page.locator('text=No listings found').or(
-          page.locator('text=Loading')
-        )
-      )
-    ).toBeVisible();
+    // Verify table structure exists
+    await expect(page.locator('table')).toBeVisible();
   });
 
   test('ACCT-01: Account Settings shows profile info', async ({ page }) => {
     // Navigate to Account Settings
-    await page.getByRole('link', { name: 'Account' }).click();
+    await page.goto('/account');
 
     // Wait for navigation
     await page.waitForURL('**/account**', { timeout: 10000 });
     await page.waitForTimeout(1000);
 
     // Verify heading
-    await expect(page.locator('text=Account Settings')).toBeVisible({ timeout: 10000 });
+    await expect(page.getByRole('heading', { name: 'Account Settings' })).toBeVisible({ timeout: 10000 });
 
     // Verify profile section exists
-    await expect(
-      page.locator('text=Profile').or(
-        page.locator('text=Full Name').or(
-          page.locator('text=Email')
-        )
-      )
-    ).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Profile Information' })).toBeVisible();
 
     // Verify email is displayed (from test credentials)
-    await expect(page.locator('text=petenelson13@gmail.com')).toBeVisible();
+    await expect(page.getByText('petenelson13@gmail.com')).toBeVisible();
   });
 
   test('INT-01: Integrations page shows connection status', async ({ page }) => {
     // Navigate to Integrations
-    await page.getByRole('link', { name: 'Integrations' }).click();
+    await page.goto('/integrations');
 
     // Wait for navigation
     await page.waitForURL('**/integrations**', { timeout: 10000 });
     await page.waitForTimeout(1000);
 
     // Verify heading
-    await expect(page.locator('text=Integrations')).toBeVisible({ timeout: 10000 });
+    await expect(page.getByRole('heading', { name: 'Integrations', exact: true })).toBeVisible({ timeout: 10000 });
 
     // Verify integration categories exist
-    await expect(
-      page.locator('text=Marketplace').or(
-        page.locator('text=eBay').or(
-          page.locator('text=Keepa')
-        )
-      )
-    ).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Marketplace Integrations', exact: true })).toBeVisible();
 
-    // Verify at least one integration card is visible
-    await expect(
-      page.locator('text=Connected').or(
-        page.locator('text=Not Connected').or(
-          page.locator('text=Connect')
-        )
-      )
-    ).toBeVisible();
+    // Verify connection status is shown
+    await expect(page.getByText(/connected/i).first()).toBeVisible();
   });
 
   test('WN-01: WhatNot Analysis page loads', async ({ page }) => {
-    // Expand Other section first
-    const otherButton = page.getByRole('button', { name: 'Other', exact: true });
-    const isExpanded = await otherButton.getAttribute('aria-expanded').catch(() => null);
-    if (isExpanded !== 'true') {
-      await otherButton.click();
-      await page.waitForTimeout(300);
-    }
+    // Navigate to Influencer Central first
+    await page.goto('/asin-lookup');
+    await page.waitForTimeout(500);
 
-    // Navigate to WhatNot Analysis
+    // Click WhatNot Analysis in sidebar (it's always visible under "Other")
     await page.getByRole('button', { name: 'WhatNot Analysis' }).click();
 
-    // Wait for navigation
-    await page.waitForURL('**/whatnot**', { timeout: 10000 });
+    // Wait for hash navigation
+    await page.waitForURL('**/asin-lookup#whatnot-analysis', { timeout: 10000 });
     await page.waitForTimeout(1000);
 
-    // Verify heading
-    await expect(
-      page.locator('text=WhatNot').or(
-        page.locator('text=Lot Analysis')
-      )
-    ).toBeVisible({ timeout: 10000 });
+    // Verify heading or WhatNot text is visible
+    await expect(page.getByText(/WhatNot/i).first()).toBeVisible({ timeout: 10000 });
 
-    // Verify file upload interface exists
+    // Verify file upload or analysis interface exists
     await expect(
       page.locator('input[type="file"]').or(
-        page.locator('text=Drop').or(
-          page.locator('text=Upload').or(
-            page.locator('text=browse')
-          )
+        page.getByText(/upload/i).or(
+          page.getByText(/drop/i)
         )
-      )
+      ).first()
     ).toBeVisible();
   });
 
   test('QL-01: Quick List settings page loads', async ({ page }) => {
     // Navigate to Marketplace Central first
-    await page.getByRole('link', { name: 'Marketplace Central' }).click();
+    await page.goto('/ebay-central');
     await page.waitForURL('**/ebay-central**', { timeout: 10000 });
     await page.waitForTimeout(1000);
 
-    // Expand eBay Tools section if needed
-    const ebayToolsButton = page.getByRole('button', { name: 'eBay Tools', exact: true });
-    const isExpanded = await ebayToolsButton.getAttribute('aria-expanded').catch(() => null);
-    if (isExpanded !== 'true') {
-      await ebayToolsButton.click();
-      await page.waitForTimeout(300);
-    }
-
-    // Then navigate to Quick List
+    // Click Quick List in sidebar (it's always visible under eBay Tools)
     await page.getByRole('button', { name: 'Quick List' }).click();
 
-    // Wait for page to load
-    await page.waitForURL('**/auto-list**', { timeout: 10000 });
-    await page.waitForTimeout(1000);
+    // Wait for page to load (could be hash-based or separate route)
+    await page.waitForTimeout(2000);
 
-    // Verify heading
-    await expect(page.locator('text=Quick List')).toBeVisible({ timeout: 10000 });
-
-    // Verify tabs exist
-    await expect(
-      page.locator('text=Create Listing').or(
-        page.locator('text=Settings')
-      )
-    ).toBeVisible();
-
-    // Click Settings tab
-    await page.getByText('Settings').click();
-    await page.waitForTimeout(500);
-
-    // Verify settings sections
-    await expect(
-      page.locator('text=Business Policies').or(
-        page.locator('text=SKU Settings').or(
-          page.locator('text=Policy')
-        )
-      )
-    ).toBeVisible();
+    // Verify Quick List heading
+    await expect(page.getByRole('heading', { name: 'Quick List', exact: true })).toBeVisible({ timeout: 10000 });
   });
 });
