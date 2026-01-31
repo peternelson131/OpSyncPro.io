@@ -16,8 +16,7 @@ import {
   Moon,
   TrendingUp,
   Plug,
-  Share2,
-  ClipboardList
+  Share2
 } from 'lucide-react'
 
 // Lazy load all page components for code splitting
@@ -38,7 +37,6 @@ const ProductCRM = lazy(() => import('./pages/ProductCRM'))
 const SocialPosts = lazy(() => import('./pages/SocialPosts'))
 const Inbox = lazy(() => import('./pages/Inbox'))
 const InboxSettings = lazy(() => import('./pages/InboxSettings'))
-const MissionControl = lazy(() => import('./pages/MissionControl'))
 
 export default function App() {
   const { user, isAuthenticated, signOut } = useAuth()
@@ -161,16 +159,6 @@ export default function App() {
                 Marketplace Central
               </Link>
               <Link
-                to="/mission-control"
-                className={`px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
-                  location.pathname === '/mission-control'
-                    ? 'bg-accent text-white'
-                    : 'text-theme-secondary hover:text-theme-primary hover:bg-theme-hover'
-                }`}
-              >
-                Mission Control
-              </Link>
-              <Link
                 to="/integrations"
                 className={`px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
                   location.pathname === '/integrations'
@@ -262,19 +250,6 @@ export default function App() {
                 </Link>
 
                 <Link
-                  to="/mission-control"
-                  className={`flex items-center px-3 py-3 rounded-lg text-base font-medium transition-colors ${
-                    location.pathname === '/mission-control'
-                      ? 'bg-accent text-white'
-                      : 'text-theme-secondary hover:text-theme-primary hover:bg-theme-hover'
-                  }`}
-                  onClick={() => setMobileMenuOpen(false)}
-                >
-                  <ClipboardList className="mr-3 h-5 w-5" strokeWidth={1.5} />
-                  Mission Control
-                </Link>
-
-                <Link
                   to="/integrations"
                   className={`flex items-center px-3 py-3 rounded-lg text-base font-medium transition-colors ${
                     location.pathname === '/integrations'
@@ -335,8 +310,8 @@ export default function App() {
         )}
       </nav>}
 
-      <main className={['/listings', '/asin-lookup', '/ebay-central', '/whatnot', '/product-crm', '/inbox', '/mission-control'].includes(location.pathname) || location.pathname === '/' ? 'w-full' : 'max-w-7xl mx-auto py-4 px-2 sm:py-6 sm:px-6 lg:px-8'}>
-        <div className={['/listings', '/asin-lookup', '/ebay-central', '/whatnot', '/product-crm', '/inbox', '/mission-control'].includes(location.pathname) || location.pathname === '/' ? '' : 'sm:px-0'}>
+      <main className={['/listings', '/asin-lookup', '/ebay-central', '/whatnot', '/product-crm', '/inbox'].includes(location.pathname) || location.pathname === '/' ? 'w-full' : 'max-w-7xl mx-auto py-4 px-2 sm:py-6 sm:px-6 lg:px-8'}>
+        <div className={['/listings', '/asin-lookup', '/ebay-central', '/whatnot', '/product-crm', '/inbox'].includes(location.pathname) || location.pathname === '/' ? '' : 'sm:px-0'}>
           <Suspense fallback={
             <div className="flex items-center justify-center py-12">
               <div className="text-center">
@@ -364,7 +339,6 @@ export default function App() {
               <Route path="/posts" element={<Navigate to="/asin-lookup#posts" replace />} />
               <Route path="/inbox" element={<Navigate to="/asin-lookup#inbox" replace />} />
               <Route path="/inbox-settings" element={<InboxSettings />} />
-              <Route path="/mission-control" element={<MissionControl />} />
             </Routes>
           </Suspense>
         </div>
