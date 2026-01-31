@@ -27,6 +27,7 @@ const { decrypt } = require('./utils/encryption');
 const { getCategorySuggestion } = require('./get-ebay-category-suggestion');
 const { getCategoryAspects } = require('./get-ebay-category-aspects');
 const { generateListingContent } = require('./generate-ebay-listing-content');
+const { wrapHandler } = require('./utils/sentry');
 
 const supabase = createClient(
   process.env.SUPABASE_URL,
@@ -56,7 +57,7 @@ async function getUserQuickListSettings(userId) {
   return data;
 }
 
-exports.handler = async (event, context) => {
+const handler = async (event, context) => {
   const headers = getCorsHeaders(event);
   const startTime = Date.now();
 
@@ -497,3 +498,6 @@ function mapCondition(condition) {
   };
   return map[condition?.toUpperCase()] || 'NEW';
 }
+
+// Wrap handler with Sentry error tracking
+exports.handler = wrapHandler(handler);

@@ -7,6 +7,7 @@
     "dev": "netlify dev"
   },
   "dependencies": {
+    "@sentry/node": "^10.38.0",
     "axios": "^1.5.0",
     "sharp": "^0.33.5",
     "stream-json": "^1.9.1",
