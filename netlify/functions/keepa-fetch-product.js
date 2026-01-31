@@ -1,30 +1,12 @@
 const fetch = require('node-fetch');
-const crypto = require('crypto');
 const { getCorsHeaders } = require('./utils/cors');
 const { createClient } = require('@supabase/supabase-js');
+const { getUserKeepaKey } = require('./utils/keepa-key-helper');
 
 const supabase = createClient(
   process.env.SUPABASE_URL,
   process.env.SUPABASE_SERVICE_ROLE_KEY
 );
-
-const ENCRYPTION_KEY = process.env.ENCRYPTION_KEY || '';
-
-function decryptApiKey(encryptedKey) {
-  if (!ENCRYPTION_KEY || !encryptedKey) return null;
-  try {
-    const parts = encryptedKey.split(':');
-    const iv = Buffer.from(parts.shift(), 'hex');
-    const encrypted = Buffer.from(parts.join(':'), 'hex');
-    const decipher = crypto.createDecipheriv('aes-256-cbc', Buffer.from(ENCRYPTION_KEY, 'hex'), iv);
-    let decrypted = decipher.update(encrypted);
-    decrypted = Buffer.concat([decrypted, decipher.final()]);
-    return decrypted.toString();
-  } catch (error) {
-    console.error('Decryption error:', error);
-    return null;
-  }
-}
 
 exports.handler = async (event, context) => {
   const headers = getCorsHeaders(event);
@@ -90,37 +72,15 @@ exports.handler = async (event, context) => {
       };
     }
 
-    // 3. Get Keepa API key from user's database record
-    const { data: userData, error: userError } = await supabase
-      .from('users')
-      .select('keepa_api_key')
-      .eq('id', user.id)
-      .single();
-
-    if (userError) {
-      throw new Error('Failed to retrieve user data');
-    }
-
-    const encryptedKey = userData?.keepa_api_key;
-    if (!encryptedKey) {
+    // 3. Get Keepa API key from encrypted storage
+    const keepaApiKey = await getUserKeepaKey(user.id, supabase, true);
+    
+    if (!keepaApiKey) {
       return {
         statusCode: 400,
         headers,
         body: JSON.stringify({
           error: 'Keepa API key not configured. Please add your Keepa API key in settings.'
-        })
-      };
-    }
-
-    // Decrypt the API key
-    const keepaApiKey = decryptApiKey(encryptedKey);
-    if (!keepaApiKey) {
-      console.error('Failed to decrypt Keepa API key');
-      return {
-        statusCode: 500,
-        headers,
-        body: JSON.stringify({
-          error: 'Failed to decrypt Keepa API key. Please re-save your API key in settings.'
         })
       };
     }

@@ -36,7 +36,8 @@ exports.handler = async (event, context) => {
     // GET - List templates or get single template
     if (event.httpMethod === 'GET') {
       const pathMatch = event.path.match(/\/([^\/]+)$/);
-      const templateId = pathMatch && pathMatch[1] !== 'thumbnail-templates' ? pathMatch[1] : null;
+      const templateId = (pathMatch && pathMatch[1] !== 'thumbnail-templates' ? pathMatch[1] : null) 
+        || event.queryStringParameters?.id;
 
       if (templateId) {
         // Get single template
@@ -203,7 +204,8 @@ exports.handler = async (event, context) => {
     // PUT - Update template
     if (event.httpMethod === 'PUT') {
       const pathMatch = event.path.match(/\/([^\/]+)$/);
-      const templateId = pathMatch && pathMatch[1] !== 'thumbnail-templates' ? pathMatch[1] : null;
+      const templateId = (pathMatch && pathMatch[1] !== 'thumbnail-templates' ? pathMatch[1] : null) 
+        || event.queryStringParameters?.id;
 
       if (!templateId) {
         return errorResponse(400, 'Template ID required', headers);
@@ -306,7 +308,8 @@ exports.handler = async (event, context) => {
     // DELETE - Delete template
     if (event.httpMethod === 'DELETE') {
       const pathMatch = event.path.match(/\/([^\/]+)$/);
-      const templateId = pathMatch && pathMatch[1] !== 'thumbnail-templates' ? pathMatch[1] : null;
+      const templateId = (pathMatch && pathMatch[1] !== 'thumbnail-templates' ? pathMatch[1] : null) 
+        || event.queryStringParameters?.id;
 
       if (!templateId) {
         return errorResponse(400, 'Template ID required', headers);

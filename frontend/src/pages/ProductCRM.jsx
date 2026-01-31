@@ -1761,7 +1761,16 @@ const ProductDetailPanel = ({ product, onClose, onUpdate, onDelete, onOwnersChan
   
   // Generate thumbnail for this product
   const handleGenerateThumbnail = async () => {
-    if (!product.image_url || !product.owners?.length) return;
+    // Validate prerequisites with clear feedback
+    if (!product.image_url) {
+      alert('Product has no image. Add an image first.');
+      return;
+    }
+    
+    if (!product.owners?.length) {
+      alert('Product has no owner assigned. Add an owner first.');
+      return;
+    }
     
     setIsGeneratingThumbnail(true);
     
@@ -1790,16 +1799,29 @@ const ProductDetailPanel = ({ product, onClose, onUpdate, onDelete, onOwnersChan
       const result = await response.json();
       
       if (result.success) {
-        // Save thumbnail URL to product_videos table
-        const { error: saveError } = await supabase
+        // Save thumbnail URL to product_videos table (update existing video record)
+        const { data: existingVideos } = await supabase
           .from('product_videos')
-          .upsert({
-            product_id: product.id,
-            thumbnail_url: result.thumbnailUrl,
-            updated_at: new Date().toISOString()
-          }, {
-            onConflict: 'product_id'
-          });
+          .select('id')
+          .eq('product_id', product.id)
+          .limit(1);
+        
+        let saveError = null;
+        if (existingVideos?.length > 0) {
+          // Update existing video record
+          const { error } = await supabase
+            .from('product_videos')
+            .update({ thumbnail_url: result.thumbnailUrl })
+            .eq('id', existingVideos[0].id);
+          saveError = error;
+        } else {
+          // No video record exists — store on sourced_products instead
+          const { error } = await supabase
+            .from('sourced_products')
+            .update({ thumbnail_url: result.thumbnailUrl })
+            .eq('id', product.id);
+          saveError = error;
+        }
         
         if (saveError) {
           console.error('Failed to save thumbnail URL:', saveError);

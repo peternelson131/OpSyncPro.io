@@ -14,8 +14,7 @@ export default function Login({ onLogin }) {
     name: ''
   })
   const [forgotData, setForgotData] = useState({
-    email: '',
-    username: ''
+    email: ''
   })
   const [resetData, setResetData] = useState({
     newPassword: '',
@@ -137,11 +136,9 @@ export default function Login({ onLogin }) {
   const validateForgot = () => {
     const newErrors = {}
 
-    if (!forgotData.email.trim() && !forgotData.username.trim()) {
-      newErrors.general = 'Please provide either email or username'
-    }
-
-    if (forgotData.email && !/\S+@\S+\.\S+/.test(forgotData.email)) {
+    if (!forgotData.email.trim()) {
+      newErrors.email = 'Email is required'
+    } else if (!/\S+@\S+\.\S+/.test(forgotData.email)) {
       newErrors.email = 'Please enter a valid email address'
     }
 
@@ -236,7 +233,7 @@ export default function Login({ onLogin }) {
       showNotification('success', 'Password reset link sent! Check your email and click the link to reset your password.')
       // Stay on login page - user will click the magic link in email
       setCurrentView('login')
-      setForgotData({ email: '', username: '' })
+      setForgotData({ email: '' })
     } catch (error) {
       console.error('Forgot password error:', error)
       setErrors({ general: 'Failed to send reset link. Please try again.' })
@@ -526,9 +523,9 @@ export default function Login({ onLogin }) {
   const renderForgotForm = () => (
     <form onSubmit={handleForgotSubmit} className="space-y-5">
       <div className="text-center mb-6">
-        <h3 className="text-lg font-medium text-theme-primary">Reset Your Credentials</h3>
+        <h3 className="text-lg font-medium text-theme-primary">Reset Your Password</h3>
         <p className="text-sm text-theme-tertiary mt-1">
-          Enter your email or username and we'll send you a reset code
+          Enter your email and we'll send you a reset link
         </p>
       </div>
 
@@ -547,24 +544,6 @@ export default function Login({ onLogin }) {
         {errors.email && <p className="text-error text-sm mt-1">{errors.email}</p>}
       </div>
 
-      <div className="text-center text-sm text-theme-tertiary">
-        — OR —
-      </div>
-
-      <div>
-        <label htmlFor="forgot-username" className={labelClasses}>
-          Username
-        </label>
-        <input
-          id="forgot-username"
-          type="text"
-          value={forgotData.username}
-          onChange={(e) => setForgotData(prev => ({ ...prev, username: e.target.value }))}
-          className={inputClasses(false)}
-          placeholder="Enter your username"
-        />
-      </div>
-
       {errors.general && (
         <div className="bg-error/10 border border-error/30 rounded-lg p-3">
           <p className="text-error text-sm">{errors.general}</p>
@@ -576,7 +555,7 @@ export default function Login({ onLogin }) {
         disabled={isLoading}
         className="w-full bg-accent text-white py-2.5 px-4 rounded-lg hover:bg-accent-hover focus:outline-none focus:ring-2 focus:ring-accent focus:ring-offset-2 focus:ring-offset-white dark:focus:ring-offset-gray-800 disabled:opacity-50 disabled:cursor-not-allowed transition-colors font-medium"
       >
-        {isLoading ? 'Sending Reset Code...' : 'Send Reset Code'}
+        {isLoading ? 'Sending Reset Link...' : 'Send Reset Link'}
       </button>
 
       <div className="text-center">
@@ -672,7 +651,7 @@ export default function Login({ onLogin }) {
           <p className="mt-2 text-sm text-theme-tertiary">
             {currentView === 'login' && 'Sign in to your account'}
             {currentView === 'signup' && 'Create your account'}
-            {currentView === 'forgot' && 'Reset your credentials'}
+            {currentView === 'forgot' && 'Reset your password'}
             {currentView === 'reset' && 'Create new password'}
           </p>
         </div>

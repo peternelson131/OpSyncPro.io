@@ -1,16 +1,13 @@
 const { createClient } = require('@supabase/supabase-js');
-const crypto = require('crypto');
 const https = require('https');
+const { encrypt, isEncryptionConfigured } = require('./utils/encryption');
+const { getUserKeepaKey } = require('./utils/keepa-key-helper');
 
 // Initialize Supabase
 const supabase = createClient(
   process.env.SUPABASE_URL || '',
   process.env.SUPABASE_SERVICE_KEY || ''
 );
-
-// Encryption setup
-const ENCRYPTION_KEY = process.env.ENCRYPTION_KEY || '';
-const IV_LENGTH = 16;
 
 // Helper function to make HTTPS requests
 function httpsGet(url) {
@@ -78,31 +75,8 @@ function httpsGet(url) {
   });
 }
 
-// Helper functions
-function encryptApiKey(apiKey) {
-  if (!ENCRYPTION_KEY) return apiKey;
-  const iv = crypto.randomBytes(IV_LENGTH);
-  const cipher = crypto.createCipheriv('aes-256-cbc', Buffer.from(ENCRYPTION_KEY, 'hex'), iv);
-  let encrypted = cipher.update(apiKey);
-  encrypted = Buffer.concat([encrypted, cipher.final()]);
-  return iv.toString('hex') + ':' + encrypted.toString('hex');
-}
-
-function decryptApiKey(encryptedKey) {
-  if (!ENCRYPTION_KEY || !encryptedKey) return null;
-  try {
-    const parts = encryptedKey.split(':');
-    const iv = Buffer.from(parts.shift(), 'hex');
-    const encrypted = Buffer.from(parts.join(':'), 'hex');
-    const decipher = crypto.createDecipheriv('aes-256-cbc', Buffer.from(ENCRYPTION_KEY, 'hex'), iv);
-    let decrypted = decipher.update(encrypted);
-    decrypted = Buffer.concat([decrypted, decipher.final()]);
-    return decrypted.toString();
-  } catch (error) {
-    console.error('Decryption error:', error);
-    return null;
-  }
-}
+// Encryption functions now imported from utils/encryption.js
+// and utils/keepa-key-helper.js
 
 // Get user from token
 async function getUserFromToken(token) {
@@ -230,69 +204,79 @@ exports.handler = async (event, context) => {
       }
 
       try {
-        // Encrypt and save the API key
-        const encryptedKey = encryptApiKey(apiKey);
+        // Verify encryption is configured
+        if (!isEncryptionConfigured()) {
+          console.error('ENCRYPTION_KEY not configured');
+          return {
+            statusCode: 500,
+            headers,
+            body: JSON.stringify({
+              success: false,
+              message: 'Server configuration error'
+            })
+          };
+        }
 
-        // First, check if user exists in users table
-        console.log('Checking if user exists in database. User ID:', user.id);
-        const { data: existingUser, error: checkError } = await supabase
-          .from('users')
+        // Encrypt and save the API key
+        const encryptedKey = encrypt(apiKey.trim());
+        
+        if (!encryptedKey) {
+          console.error('Failed to encrypt API key');
+          return {
+            statusCode: 500,
+            headers,
+            body: JSON.stringify({
+              success: false,
+              message: 'Failed to secure API key'
+            })
+          };
+        }
+
+        console.log(`🔐 Encrypted Keepa key for user ${user.id}`);
+
+        // Check if key already exists for this user/service
+        const { data: existing } = await supabase
+          .from('user_api_keys')
           .select('id')
-          .eq('id', user.id)
+          .eq('user_id', user.id)
+          .eq('service', 'keepa')
           .single();
 
-        if (checkError && checkError.code !== 'PGRST116') {
-          // PGRST116 means no rows found, which is ok - we'll create the user
-          console.error('Error checking for existing user:', checkError);
-        }
-
-        console.log('User exists?', !!existingUser);
-
-        let saveError;
-        if (existingUser) {
-          // User exists, update it
-          console.log('Updating existing user with encrypted API key');
+        if (existing) {
+          // Update existing key
           const { error } = await supabase
-            .from('users')
+            .from('user_api_keys')
             .update({
-              keepa_api_key: encryptedKey,
+              api_key_encrypted: encryptedKey,
+              is_valid: true,
               updated_at: new Date().toISOString()
             })
-            .eq('id', user.id);
-          saveError = error;
-          if (error) {
-            console.error('Error updating user:', error);
-          } else {
-            console.log('Successfully updated user with Keepa API key');
-          }
-        } else {
-          // User doesn't exist, create it with minimal required fields
-          console.log('Creating new user with encrypted API key');
-          const { error } = await supabase
-            .from('users')
-            .insert({
-              id: user.id,
-              email: user.email,
-              keepa_api_key: encryptedKey,
-              created_at: new Date().toISOString(),
-              updated_at: new Date().toISOString()
-            });
-          saveError = error;
-          if (error) {
-            console.error('Error inserting new user:', error);
-          } else {
-            console.log('Successfully created user with Keepa API key');
-          }
-        }
+            .eq('id', existing.id);
 
-        if (saveError) {
-          console.error('Database operation failed:', {
-            code: saveError.code,
-            message: saveError.message,
-            details: saveError.details,
-            hint: saveError.hint
-          });
-          throw saveError;
+          if (error) {
+            console.error('Failed to update key:', error);
+            throw error;
+          }
+
+          console.log('✅ Updated existing Keepa API key');
+        } else {
+          // Insert new key
+          const { error } = await supabase
+            .from('user_api_keys')
+            .insert({
+              user_id: user.id,
+              service: 'keepa',
+              api_key_encrypted: encryptedKey,
+              label: 'default',
+              is_valid: true
+            });
+
+          if (error) {
+            console.error('Failed to insert key:', error);
+            throw error;
+          }
+
+          console.log('✅ Created new Keepa API key');
         }
 
         return {
@@ -341,26 +325,9 @@ exports.handler = async (event, context) => {
     }
 
     if (segments[0] === 'test-connection' && event.httpMethod === 'GET') {
-      // Test connection - only fetch the API key, no other stored data
-      const { data: userProfile, error: profileError } = await supabase
-        .from('users')
-        .select('keepa_api_key')
-        .eq('id', user.id)
-        .single();
-
-      if (profileError || !userProfile || !userProfile.keepa_api_key) {
-        return {
-          statusCode: 200,
-          headers,
-          body: JSON.stringify({
-            success: false,
-            connected: false,
-            message: 'No Keepa API key configured'
-          })
-        };
-      }
-
-      const apiKey = decryptApiKey(userProfile.keepa_api_key);
+      // Test connection - fetch API key from encrypted storage
+      const apiKey = await getUserKeepaKey(user.id, supabase, true);
+      
       if (!apiKey) {
         return {
           statusCode: 200,
@@ -368,7 +335,7 @@ exports.handler = async (event, context) => {
           body: JSON.stringify({
             success: false,
             connected: false,
-            message: 'Failed to decrypt API key'
+            message: 'No Keepa API key configured'
           })
         };
       }
@@ -407,32 +374,16 @@ exports.handler = async (event, context) => {
       if (action === 'product' && asin) {
         console.log('Product lookup requested for ASIN:', asin);
 
-        // Get user's Keepa API key
-        const { data: userProfile, error: profileError } = await supabase
-          .from('users')
-          .select('keepa_api_key')
-          .eq('id', user.id)
-          .single();
-
-        if (profileError || !userProfile || !userProfile.keepa_api_key) {
+        // Get user's Keepa API key from encrypted storage
+        const apiKey = await getUserKeepaKey(user.id, supabase, true);
+        
+        if (!apiKey) {
           return {
             statusCode: 400,
             headers,
             body: JSON.stringify({
               success: false,
               message: 'No Keepa API key configured. Please configure your Keepa API key first.'
-            })
-          };
-        }
-
-        const apiKey = decryptApiKey(userProfile.keepa_api_key);
-        if (!apiKey) {
-          return {
-            statusCode: 500,
-            headers,
-            body: JSON.stringify({
-              success: false,
-              message: 'Failed to decrypt API key'
             })
           };
         }

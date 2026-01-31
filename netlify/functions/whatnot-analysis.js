@@ -11,34 +11,14 @@
  */
 
 const { createClient } = require('@supabase/supabase-js');
-const crypto = require('crypto');
 const https = require('https');
+const { getUserKeepaKeyWithSystemFallback } = require('./utils/keepa-key-helper');
 
 // Initialize Supabase
 const supabase = createClient(
   process.env.SUPABASE_URL,
   process.env.SUPABASE_SERVICE_ROLE_KEY
 );
-
-// Encryption for API keys
-const ENCRYPTION_KEY = process.env.ENCRYPTION_KEY || '';
-const IV_LENGTH = 16;
-
-function decryptApiKey(encryptedKey) {
-  if (!ENCRYPTION_KEY || !encryptedKey) return null;
-  try {
-    const parts = encryptedKey.split(':');
-    const iv = Buffer.from(parts.shift(), 'hex');
-    const encrypted = Buffer.from(parts.join(':'), 'hex');
-    const decipher = crypto.createDecipheriv('aes-256-cbc', Buffer.from(ENCRYPTION_KEY, 'hex'), iv);
-    let decrypted = decipher.update(encrypted);
-    decrypted = Buffer.concat([decrypted, decipher.final()]);
-    return decrypted.toString();
-  } catch (error) {
-    console.error('Decryption error:', error);
-    return null;
-  }
-}
 
 // HTTPS helper for Keepa
 function httpsGet(url) {
@@ -94,21 +74,9 @@ async function getUserFromToken(token) {
 }
 
 // Get user's Keepa API key (falls back to env var)
+// Now using centralized helper function
 async function getKeepaApiKey(userId) {
-  // First try user's stored key
-  const { data, error } = await supabase
-    .from('users')
-    .select('keepa_api_key')
-    .eq('id', userId)
-    .single();
-  
-  if (!error && data?.keepa_api_key) {
-    const decrypted = decryptApiKey(data.keepa_api_key);
-    if (decrypted) return decrypted;
-  }
-  
-  // Fall back to environment variable
-  return process.env.KEEPA_API_KEY || null;
+  return await getUserKeepaKeyWithSystemFallback(userId, supabase);
 }
 
 // Parse Keepa price (stored as integer cents * 100, or -1 for unavailable)

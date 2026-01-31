@@ -1,14 +1,11 @@
 const { createClient } = require('@supabase/supabase-js');
-const crypto = require('crypto');
 const https = require('https');
+const { getUserKeepaKey } = require('./utils/keepa-key-helper');
 
 const supabase = createClient(
   process.env.SUPABASE_URL || '',
   process.env.SUPABASE_SERVICE_KEY || ''
 );
-
-const ENCRYPTION_KEY = process.env.ENCRYPTION_KEY || '';
-const IV_LENGTH = 16;
 
 // Keepa domain IDs
 const DOMAINS = {
@@ -62,20 +59,7 @@ function httpsGet(url) {
   });
 }
 
-function decryptApiKey(encryptedKey) {
-  if (!ENCRYPTION_KEY || !encryptedKey) return null;
-  try {
-    const parts = encryptedKey.split(':');
-    const iv = Buffer.from(parts.shift(), 'hex');
-    const encrypted = Buffer.from(parts.join(':'), 'hex');
-    const decipher = crypto.createDecipheriv('aes-256-cbc', Buffer.from(ENCRYPTION_KEY, 'hex'), iv);
-    let decrypted = decipher.update(encrypted);
-    decrypted = Buffer.concat([decrypted, decipher.final()]);
-    return decrypted.toString();
-  } catch (error) {
-    return null;
-  }
-}
+// Decryption now handled by keepa-key-helper.js
 
 async function getUserFromToken(token) {
   if (!token) return null;
@@ -135,27 +119,14 @@ exports.handler = async (event, context) => {
       };
     }
 
-    // Get user's Keepa API key
-    const { data: userProfile } = await supabase
-      .from('users')
-      .select('keepa_api_key')
-      .eq('id', user.id)
-      .single();
-
-    if (!userProfile?.keepa_api_key) {
+    // Get user's Keepa API key from encrypted storage
+    const apiKey = await getUserKeepaKey(user.id, supabase, true);
+    
+    if (!apiKey) {
       return {
         statusCode: 400,
         headers,
         body: JSON.stringify({ success: false, message: 'No Keepa API key configured' })
-      };
-    }
-
-    const apiKey = decryptApiKey(userProfile.keepa_api_key);
-    if (!apiKey) {
-      return {
-        statusCode: 500,
-        headers,
-        body: JSON.stringify({ success: false, message: 'Failed to decrypt API key' })
       };
     }
 

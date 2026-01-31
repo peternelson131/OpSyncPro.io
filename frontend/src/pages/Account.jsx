@@ -5,6 +5,7 @@ import { userAPI, authAPI, supabase } from '../lib/supabase'
 import { Shield, MessageSquare, Zap, Settings, User, Loader, Image, Trash2, X, Check, CheckCircle, Undo2, ImagePlus, Edit, Plus, ExternalLink, Clock, Lock, AlertTriangle } from 'lucide-react'
 import ThumbnailTemplateModal from '../components/ThumbnailTemplateModal'
 import FolderPicker from '../components/onedrive/FolderPicker'
+import { toast } from '../utils/toast'
 
 export default function Account() {
   const [searchParams, setSearchParams] = useSearchParams()
@@ -112,11 +113,24 @@ export default function Account() {
   const { data: crmOwners = [] } = useQuery(
     ['crmOwners'],
     async () => {
+      // Get authenticated user to filter owners
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) {
+        console.warn('No authenticated user for CRM owners query')
+        return []
+      }
+      
       const { data, error } = await supabase
         .from('crm_owners')
         .select('id, name')
+        .eq('user_id', user.id)
         .order('name')
-      if (error) throw error
+      
+      if (error) {
+        console.error('Failed to fetch CRM owners:', error)
+        throw error
+      }
+      
       return data || []
     },
     {
@@ -1443,22 +1457,34 @@ export default function Account() {
                 ? `/.netlify/functions/thumbnail-templates?id=${templateData.id}`
                 : '/.netlify/functions/thumbnail-templates'
               
+              // Transform snake_case to camelCase for backend
+              const payload = {
+                ownerId: templateData.owner_id,
+                templateFile: templateData.template_image,
+                placementZone: templateData.placement_zone,
+                id: templateData.id
+              }
+              
               const response = await fetch(url, {
                 method,
                 headers: { 
                   Authorization: `Bearer ${token}`,
                   'Content-Type': 'application/json'
                 },
-                body: JSON.stringify(templateData)
+                body: JSON.stringify(payload)
               })
               
               if (!response.ok) throw new Error('Failed to save template')
               
-              refetchTemplates()
+              // Wait for template list to refresh before closing modal
+              await refetchTemplates()
+              
+              toast.success('Template saved successfully')
               setShowTemplateModal(false)
               setEditingTemplate(null)
             } catch (error) {
               console.error('Save template error:', error)
+              toast.error('Failed to save template: ' + error.message)
             }
           }}
         />

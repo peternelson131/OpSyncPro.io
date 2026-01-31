@@ -9,8 +9,8 @@ const { createClient } = require('@supabase/supabase-js');
 const fs = require('fs');
 
 const SUPABASE_URL = process.env.SUPABASE_URL || 'https://zxcdkanccbdeqebnabgg.supabase.co';
-const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inp4Y2RrYW5jY2JkZXFlYm5hYmdnIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc1OTAwNDA3MCwiZXhwIjoyMDc0NTgwMDcwfQ.r44KVS4730gbXbpkaW10wm4xJTX9imGi8sxOC64u2PU';
-const KEEPA_KEY = process.env.KEEPA_API_KEY || '1o56h544hgl404gh3a1kdns4n5jvju2resncf4i0fhlkfa8cuhgl44dkdooa78ls';
+const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
+const KEEPA_KEY = process.env.KEEPA_API_KEY;
 const API_BASE = 'https://dainty-horse-49c336.netlify.app/.netlify/functions';
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY, { auth: { persistSession: false } });

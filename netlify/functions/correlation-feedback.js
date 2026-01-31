@@ -1,10 +1,9 @@
 const { createClient } = require('@supabase/supabase-js');
-const crypto = require('crypto');
 const https = require('https');
+const { getUserKeepaKey } = require('./utils/keepa-key-helper');
 
 const supabaseUrl = process.env.SUPABASE_URL;
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-const ENCRYPTION_KEY = process.env.ENCRYPTION_KEY || '';
 
 // Keepa domain IDs
 const DOMAINS = {
@@ -28,27 +27,7 @@ function getCorsHeaders(event) {
   };
 }
 
-function decryptApiKey(storedKey) {
-  if (!storedKey) return null;
-  
-  // Check if it looks like an encrypted key (contains colon separator)
-  if (storedKey.includes(':') && ENCRYPTION_KEY) {
-    try {
-      const parts = storedKey.split(':');
-      const iv = Buffer.from(parts.shift(), 'hex');
-      const encrypted = Buffer.from(parts.join(':'), 'hex');
-      const decipher = crypto.createDecipheriv('aes-256-cbc', Buffer.from(ENCRYPTION_KEY, 'hex'), iv);
-      let decrypted = decipher.update(encrypted);
-      decrypted = Buffer.concat([decrypted, decipher.final()]);
-      return decrypted.toString();
-    } catch (error) {
-      console.log('Decryption failed, trying as plain text');
-    }
-  }
-  
-  // Return as-is if not encrypted or decryption failed
-  return storedKey;
-}
+// Decryption now handled by keepa-key-helper.js
 
 function httpsGet(url) {
   return new Promise((resolve, reject) => {
@@ -238,20 +217,13 @@ exports.handler = async (event, context) => {
       // If accepting, check marketplace availability via Keepa
       let availability = null;
       if (decision === 'accepted') {
-        // Get user's Keepa API key
-        const { data: userProfile } = await supabase
-          .from('users')
-          .select('keepa_api_key')
-          .eq('id', user.id)
-          .single();
-
-        if (userProfile?.keepa_api_key) {
-          const apiKey = decryptApiKey(userProfile.keepa_api_key);
-          if (apiKey) {
-            console.log(`Checking marketplace availability for ${normalizedCandidate}...`);
-            availability = await checkMarketplaceAvailability(apiKey, normalizedCandidate);
-            console.log('Availability result:', availability);
-          }
+        // Get user's Keepa API key from encrypted storage
+        const apiKey = await getUserKeepaKey(user.id, supabase, true);
+        
+        if (apiKey) {
+          console.log(`Checking marketplace availability for ${normalizedCandidate}...`);
+          availability = await checkMarketplaceAvailability(apiKey, normalizedCandidate);
+          console.log('Availability result:', availability);
         }
       }
 
