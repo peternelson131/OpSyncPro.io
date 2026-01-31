@@ -18,6 +18,7 @@
 const { createClient } = require('@supabase/supabase-js');
 const { getCorsHeaders, handlePreflight, errorResponse, successResponse } = require('./utils/cors');
 const { verifyAuth } = require('./utils/auth');
+const { wrapHandler } = require('./utils/sentry');
 const Busboy = require('busboy');
 const XLSX = require('xlsx');
 const zlib = require('zlib');
@@ -1251,7 +1252,7 @@ async function handleDelete(event, userId, headers) {
 /**
  * Main handler
  */
-exports.handler = async (event, context) => {
+const handler = async (event, context) => {
   const headers = getCorsHeaders(event);
   
   // Handle CORS preflight
@@ -1286,3 +1287,6 @@ exports.handler = async (event, context) => {
     return errorResponse(500, error.message || 'Internal server error', headers);
   }
 };
+
+// Wrap handler with Sentry error tracking
+exports.handler = wrapHandler(handler);

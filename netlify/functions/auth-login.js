@@ -8,6 +8,7 @@
 
 const { createClient } = require('@supabase/supabase-js');
 const { getCorsHeaders, handlePreflight, errorResponse, successResponse } = require('./utils/cors');
+const { wrapHandler } = require('./utils/sentry');
 
 const supabase = createClient(
   process.env.SUPABASE_URL,
@@ -19,7 +20,7 @@ const supabaseService = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY
 );
 
-exports.handler = async (event, context) => {
+const handler = async (event, context) => {
   const headers = getCorsHeaders(event);
 
   // Handle CORS preflight
@@ -105,3 +106,6 @@ exports.handler = async (event, context) => {
     return errorResponse(500, error.message || 'Internal server error', headers);
   }
 };
+
+// Wrap handler with Sentry error tracking
+exports.handler = wrapHandler(handler);

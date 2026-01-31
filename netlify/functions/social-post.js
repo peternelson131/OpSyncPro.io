@@ -7,6 +7,7 @@ const { createClient } = require('@supabase/supabase-js');
 const { getCorsHeaders, handlePreflight, errorResponse, successResponse } = require('./utils/cors');
 const { verifyAuth } = require('./utils/auth');
 const { getValidAccessToken } = require('./utils/onedrive-api');
+const { wrapHandler } = require('./utils/sentry');
 const cloudinary = require('cloudinary').v2;
 
 const supabase = createClient(
@@ -42,7 +43,7 @@ if (CLOUDINARY_CLOUD_NAME && CLOUDINARY_API_KEY && CLOUDINARY_API_SECRET) {
   });
 }
 
-exports.handler = async (event, context) => {
+const handler = async (event, context) => {
   const headers = getCorsHeaders(event);
 
   if (handlePreflight(event)) {
@@ -915,3 +916,6 @@ async function postToInstagram(userId, video, connection, accessToken, title, de
     };
   }
 }
+
+// Wrap handler with Sentry error tracking
+exports.handler = wrapHandler(handler);
