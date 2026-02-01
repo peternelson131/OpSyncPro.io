@@ -1,4 +1,5 @@
 import { createClient } from '@supabase/supabase-js'
+import { fetchJSON } from '../utils/fetchWithAuth'
 
 // Real Supabase configuration
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL
@@ -17,7 +18,13 @@ if (!isDemoMode) {
     console.log('📦 Supabase not configured - using localStorage mode')
     // Using localStorage mode when Supabase is not configured
   } else {
-    realSupabaseClient = createClient(supabaseUrl, supabaseAnonKey)
+    realSupabaseClient = createClient(supabaseUrl, supabaseAnonKey, {
+      auth: {
+        autoRefreshToken: true,
+        persistSession: true,
+        detectSessionInUrl: true
+      }
+    })
     console.log('🔌 Supabase client initialized with real configuration')
   }
 } else {
@@ -423,25 +430,15 @@ const realListingsAPI = realSupabaseClient ? {
     const { data: { user } } = await realSupabaseClient.auth.getUser()
     if (!user) throw new Error('User not authenticated')
 
-    // Get session token for API call
-    const { data: { session } } = await realSupabaseClient.auth.getSession()
-    if (!session) throw new Error('No active session')
-
     // Call Netlify function to reduce price (which also updates eBay)
-    const response = await fetch(`/.netlify/functions/reduce-price/${listingId}/reduce`, {
+    // fetchJSON handles auth token and 401 retry automatically
+    const data = await fetchJSON(`/.netlify/functions/reduce-price/${listingId}/reduce`, {
       method: 'POST',
       headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${session.access_token}`
+        'Content-Type': 'application/json'
       },
       body: JSON.stringify({ customPrice: newPrice })
     })
-
-    const data = await response.json()
-
-    if (!response.ok) {
-      throw new Error(data.error || 'Failed to reduce price')
-    }
 
     return data.listing
   },
@@ -450,25 +447,15 @@ const realListingsAPI = realSupabaseClient ? {
     const { data: { user } } = await realSupabaseClient.auth.getUser()
     if (!user) throw new Error('User not authenticated')
 
-    // Get session token for API call
-    const { data: { session } } = await realSupabaseClient.auth.getSession()
-    if (!session) throw new Error('No active session')
-
     // Call Netlify function to create listing on eBay
-    const response = await fetch('/.netlify/functions/create-ebay-listing', {
+    // fetchJSON handles auth token and 401 retry automatically
+    const data = await fetchJSON('/.netlify/functions/create-ebay-listing', {
       method: 'POST',
       headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${session.access_token}`
+        'Content-Type': 'application/json'
       },
       body: JSON.stringify(listingData)
     })
-
-    const data = await response.json()
-
-    if (!response.ok) {
-      throw new Error(data.error || data.message || 'Failed to create listing')
-    }
 
     return data
   }
