@@ -124,7 +124,9 @@ async function processBatch(asins, userId, jobId, batchNum, totalBatches) {
         const imageCodes = product.imagesCSV.split(',');
         const imageCode = imageCodes[0]?.trim();
         if (imageCode && imageCode.length > 0) {
-          imageUrl = `https://m.media-amazon.com/images/I/${imageCode}._SL500_.jpg`;
+          // Strip .jpg extension if present (Keepa includes it)
+          const cleanCode = imageCode.replace(/\.jpg$/i, '');
+          imageUrl = `https://m.media-amazon.com/images/I/${cleanCode}._SL500_.jpg`;
         }
       }
       

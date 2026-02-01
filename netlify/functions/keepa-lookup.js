@@ -69,14 +69,12 @@ exports.handler = async (event) => {
     if (product.imagesCSV) {
       const images = product.imagesCSV.split(',');
       if (images.length > 0) {
-        // Keepa stores image codes, convert to full URL
-        imageUrl = `https://images-na.ssl-images-amazon.com/images/I/${images[0]}`;
+        const imageCode = images[0].trim();
+        // Strip .jpg extension if present (Keepa includes it)
+        const cleanCode = imageCode.replace(/\.jpg$/i, '');
+        // Keepa stores image codes, convert to full Amazon CDN URL
+        imageUrl = `https://m.media-amazon.com/images/I/${cleanCode}._SL500_.jpg`;
       }
-    }
-    
-    // Fallback to Keepa's cached image
-    if (!imageUrl) {
-      imageUrl = `https://images.keepa.com/600/${asin}.jpg`;
     }
 
     return {
