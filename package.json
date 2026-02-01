@@ -4,7 +4,11 @@
   "description": "eBay automated price reduction application",
   "scripts": {
     "test-ebay": "node test-ebay-local.js",
-    "dev": "netlify dev"
+    "dev": "netlify dev",
+    "test:e2e": "playwright test",
+    "test:e2e:ui": "playwright test --ui",
+    "test:e2e:debug": "playwright test --debug",
+    "test:setup": "playwright test auth.setup"
   },
   "dependencies": {
     "axios": "^1.5.0",
@@ -14,10 +18,13 @@
     "xml2js": "^0.6.2"
   },
   "devDependencies": {
+    "@playwright/test": "^1.58.1",
     "@supabase/supabase-js": "^2.90.1",
+    "@types/node": "^25.1.0",
     "dotenv": "^17.2.3",
     "netlify-cli": "^17.38.1",
     "node-fetch": "^2.7.0",
-    "pg": "^8.17.1"
+    "pg": "^8.17.1",
+    "typescript": "^5.9.3"
   }
 }
